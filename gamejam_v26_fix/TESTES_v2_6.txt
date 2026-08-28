@@ -1,0 +1,42 @@
+PAC III — GAME JAM — RELATÓRIO DE TESTES v2.6
+
+Correções desta versão:
+- Pino agora salta visualmente em cada casa.
+- Intervalo entre casas aumentado para ~900 ms.
+- Último salto termina antes de abrir a casa.
+- Ao fim dos 20 s, o timer mostra 'Corrigindo...'.
+- Resultado grande continua por 6 s.
+- Pódio agora fecha automaticamente após 6,5 s.
+- Após o pódio, o jogo avança automaticamente para o próximo turno.
+
+RESULTADO: 28/28 TESTES PASS
+
+Simulação temporal completa:
+PASS — Sintaxe server.js
+PASS — Sintaxe questions.js
+PASS — Sintaxe JS professor
+PASS — Sintaxe JS aluno
+PASS — Dado continua D6
+PASS — Animação do dado continua 5s
+PASS — Resultado do dado permanece 2,2s
+PASS — Pino usa passos de 900ms
+PASS — Último salto termina antes do desafio
+PASS — CSS de salto existe
+PASS — Pergunta permanece 20s
+PASS — Timer mostra Corrigindo no zero
+PASS — Responder cedo não fecha votação
+PASS — Resultado vinculado ao voteId
+PASS — Resposta grande preservada
+PASS — Pódio fecha automaticamente
+PASS — Após pódio avança o turno
+PASS — Crunch automático preservado
+PASS — Kickoff preservado
+PASS — 14 desafios preservados
+PASS — Bifurcação permanece removida
+PASS — Pitch 3/5 preservado
+PASS — Fluxo temporal D6=1 — pergunta≈9.06s; resposta≈29.06s; próximo turno≈41.56s
+PASS — Fluxo temporal D6=2 — pergunta≈9.96s; resposta≈29.96s; próximo turno≈42.46s
+PASS — Fluxo temporal D6=3 — pergunta≈10.86s; resposta≈30.86s; próximo turno≈43.36s
+PASS — Fluxo temporal D6=4 — pergunta≈11.76s; resposta≈31.76s; próximo turno≈44.26s
+PASS — Fluxo temporal D6=5 — pergunta≈12.66s; resposta≈32.66s; próximo turno≈45.16s
+PASS — Fluxo temporal D6=6 — pergunta≈13.56s; resposta≈33.56s; próximo turno≈46.06s
