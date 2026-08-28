@@ -16,12 +16,12 @@ app.get('/qr.png',async(req,res)=>{try{res.type('png').send(await QRCode.toBuffe
 
 function current(){return game.teams[game.turnIndex]||null}
 function emitGame(){io.emit('game:state',game)}
-function pubVote(){if(!vote)return null;return {voteId:vote.id,open:vote.open,kind:vote.kind,optionCount:vote.optionCount,eligibleTeamIds:vote.eligible,currentChoices:{...vote.responses}}}
+function pubVote(){if(!vote)return null;return {voteId:vote.id,questionToken:vote.questionToken,open:vote.open,kind:vote.kind,optionCount:vote.optionCount,eligibleTeamIds:vote.eligible,currentChoices:{...vote.responses},endsAt:vote.endsAt,duration:vote.duration}}
 function closeVote(){
  if(!vote||!vote.open)return; vote.open=false; clearTimeout(timer); clearInterval(voteTick);
  const results={}; for(const id of vote.eligible){const c=Object.prototype.hasOwnProperty.call(vote.responses,id)?vote.responses[id]:null;results[id]={choice:c,correct:c===vote.correctIndex,answered:c!==null}}
- io.emit('vote:result',{voteId:vote.id,kind:vote.kind,results,correctIndex:vote.correctIndex});
- io.emit('vote:closed',{voteId:vote.id}); setTimeout(()=>vote=null,800);
+ io.emit('vote:result',{voteId:vote.id,questionToken:vote.questionToken,kind:vote.kind,results,correctIndex:vote.correctIndex});
+ io.emit('vote:closed',{voteId:vote.id,questionToken:vote.questionToken}); setTimeout(()=>vote=null,800);
 }
 function resetGame(){
  clearTimeout(timer); clearInterval(voteTick);
@@ -262,23 +262,23 @@ io.on('connection',socket=>{
      id:'V'+now,open:true,kind:d.kind||'collective',
      optionCount:+d.optionCount||4,correctIndex:+d.correctIndex,
      eligible:[...new Set(d.eligibleTeamIds||[])],
-     responses:{},openedAt:now,duration,endsAt:now+duration*1000
+     responses:{},questionToken:String(d.questionToken||('Q'+now)),openedAt:now,duration,endsAt:now+duration*1000
    };
 
    io.emit('vote:open',pubVote());
-   io.emit('vote:progress',{voteId:vote.id,count:0,total:vote.eligible.length});
-   io.emit('vote:tick',{voteId:vote.id,remaining:duration});
+   io.emit('vote:progress',{voteId:vote.id,questionToken:vote.questionToken,count:0,total:vote.eligible.length,voterIds:[]});
+   io.emit('vote:tick',{voteId:vote.id,questionToken:vote.questionToken,remaining:duration});
 
    clearInterval(voteTick);
    voteTick=setInterval(()=>{
      if(!vote||!vote.open){clearInterval(voteTick);return}
      const remaining=Math.max(0,Math.ceil((vote.endsAt-Date.now())/1000));
-     io.emit('vote:tick',{voteId:vote.id,remaining});
+     io.emit('vote:tick',{voteId:vote.id,questionToken:vote.questionToken,remaining});
      if(remaining<=0)clearInterval(voteTick);
    },250);
 
    timer=setTimeout(closeVote,duration*1000);
-   ack&&ack({ok:true,voteId:vote.id,duration,endsAt:vote.endsAt});
+   ack&&ack({ok:true,voteId:vote.id,questionToken:vote.questionToken,duration,endsAt:vote.endsAt});
  });
  socket.on('professor:applyEffect',(d,ack)=>applyGameEffect(d,ack));
  socket.on('professor:closeVote',()=>closeVote());
@@ -304,9 +304,18 @@ io.on('connection',socket=>{
  });
  socket.on('student:vote',(d,ack)=>{
    if(!vote||!vote.open)return ack&&ack({ok:false,message:'Votação encerrada.'});
-   const id=String(d?.teamId||''); if(!vote.eligible.includes(id))return ack&&ack({ok:false,message:'Seu estúdio acompanha, mas não responde esta rodada.'});
-   const c=+d.choice;if(!Number.isInteger(c)||c<0||c>=vote.optionCount)return ack&&ack({ok:false,message:'Alternativa inválida.'});
-   vote.responses[id]=c;io.emit('vote:progress',{voteId:vote.id,count:Object.keys(vote.responses).length,total:vote.eligible.length});ack&&ack({ok:true});
+   if(String(d?.voteId||'')!==vote.id)return ack&&ack({ok:false,message:'Esta pergunta já mudou. Aguarde a questão atual.'});
+   const id=String(d?.teamId||'');
+   if(socket.data.teamId && socket.data.teamId!==id)return ack&&ack({ok:false,message:'Este controle está vinculado a outro estúdio.'});
+   if(!vote.eligible.includes(id))return ack&&ack({ok:false,message:'Seu estúdio acompanha, mas não responde esta rodada.'});
+   const c=+d.choice;
+   if(!Number.isInteger(c)||c<0||c>=vote.optionCount)return ack&&ack({ok:false,message:'Alternativa inválida.'});
+   vote.responses[id]=c;
+   const voterIds=Object.keys(vote.responses);
+   const progress={voteId:vote.id,questionToken:vote.questionToken,count:voterIds.length,total:vote.eligible.length,voterIds};
+   io.emit('vote:progress',progress);
+   io.emit('vote:accepted',{voteId:vote.id,questionToken:vote.questionToken,teamId:id,count:voterIds.length,total:vote.eligible.length});
+   ack&&ack({ok:true,voteId:vote.id,choice:c,count:voterIds.length,total:vote.eligible.length});
  });
 });
 function ips(){let a=[];for(const xs of Object.values(os.networkInterfaces()))for(const x of xs||[])if(x.family==='IPv4'&&!x.internal)a.push(x.address);return a}

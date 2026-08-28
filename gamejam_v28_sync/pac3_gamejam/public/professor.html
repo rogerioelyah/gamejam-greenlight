@@ -130,6 +130,17 @@ linear-gradient(#13365f 0 50%,#123a35 50% 57%,#142a1c 57% 100%);}
 }
 
 </style></head><body>
+<button id="traceFab" class="traceFab" title="">·</button>
+<div id="tracePanel" class="tracePanel">
+  <div class="traceHead"><b>TRACE</b><span id="traceStatus">live</span></div>
+  <div id="traceBody" class="traceBody"></div>
+  <div class="traceActions">
+    <button id="traceRefresh">Atualizar</button>
+    <button id="traceCopy">Copiar</button>
+    <button id="traceClear">Limpar local</button>
+    <button id="traceClose">Fechar</button>
+  </div>
+</div>
 <header class="top"><div class="brand">🎮 PAC III — <span>GAME JAM: CORRIDA PELO GREENLIGHT</span><small>Jogos Digitais Educacionais • Game Master</small></div><div class="row"><button class="btn" id="qrBtn">📱 QR</button><button class="btn" id="undo">↩ Desfazer</button><button class="btn" id="reset">↻ Reiniciar</button></div></header>
 <section id="setup" class="setup"><div class="card"><div class="ey">Kickoff da Game Jam</div><h1>7 estúdios. 4 mundos. 1 Greenlight.</h1><p>Cada equipe controla um estúdio pelo celular. O dado define a oportunidade; conhecimento, desafios e Power-Ups definem a estratégia. Configure os estúdios presentes.</p><div class="row"><b>Estúdios:</b><select id="count" class="btn"></select><button class="btn" id="apply">APLICAR</button></div><div id="names" class="names"></div><button class="btn primary" id="start">🚀 INICIAR GAME JAM</button></div></section>
 <section id="game" class="game hidden">
@@ -163,7 +174,7 @@ linear-gradient(#13365f 0 50%,#123a35 50% 57%,#142a1c 57% 100%);}
 <script src="/socket.io/socket.io.js"></script><script src="/questions.js"></script><script>
 const socket=io(),$=id=>document.getElementById(id),LET=['A','B','C','D'];
 let S={teams:[],turnIndex:0,started:false,turnCount:1,phase:'CONCEITO'},history=[],activeQ=null,lastVote=null,turbo=false,pitch={};
-let movingTeamId=null,currentVoteId=null;
+let movingTeamId=null,currentVoteId=null,currentVoteToken=null;
 const TYPES=['challenge','insight','challenge','bug','challenge','battle','challenge','challenge','challenge','insight','challenge','bug','challenge','battle','challenge','challenge','challenge','insight','challenge','bug','challenge','battle','challenge','pitch'];
 const ICO={challenge:'🎯',insight:'💡',bug:'🐞',battle:'⚔️',pitch:'🏰'};
 const phaseAt=p=>p<=6?'CONCEITO':p<=12?'GAMEPLAY':p<=18?'PLAYTEST':'PITCH';
@@ -228,6 +239,7 @@ function sync(){S.phase=phaseAt(cur()?.pos||1);socket.emit('professor:state',S)}
 function snapshot(){history.push(JSON.stringify(S));if(history.length>20)history.shift()}
 function shuffled(q){let a=q[2].map((x,i)=>({x,i}));for(let i=a.length-1;i>0;i--){let j=Math.floor(Math.random()*(i+1));[a[i],a[j]]=[a[j],a[i]]}return {phase:q[0],text:q[1],opts:a.map(z=>z.x),correct:a.findIndex(z=>z.i===q[3]),why:q[4]}}
 function pick(ph,n=3){let a=QUESTION_BANK.filter(q=>q[0]===ph);return shuffled(a[Math.floor(Math.random()*a.length)])}
+function newVoteToken(kind='Q'){return `${kind}-${Date.now()}-${Math.random().toString(36).slice(2,8)}`}
 function setup(n){$('names').innerHTML='';for(let i=1;i<=n;i++)$('names').innerHTML+=`<input value="Estúdio ${i}" id="n${i}">`}
 for(let i=2;i<=7;i++)$('count').innerHTML+=`<option ${i===7?'selected':''}>${i}</option>`;setup(7);
 $('apply').onclick=()=>setup(+$('count').value);
@@ -284,30 +296,34 @@ $('profRoll').onclick=()=>socket.emit('professor:roll',{},a=>{if(!a?.ok)toast(a?
 $('move').onclick=()=>{let t=cur();if(!t)return;snapshot();t.revealed=t.revealed||{};t.revealed[t.pos]=true;sync();render();land(t)}
 function land(t){let type=TYPES[t.pos-1],ph=phaseAt(t.pos);if(type==='challenge')return question(t,ph,'collective');if(type==='insight'){return applyEffect({teamId:t.id,kind:'points',amount:1},()=>applyEffect({teamId:t.id,kind:'inventory',item:'insight',amount:1},()=>eventModal('💡 INSIGHT CRIATIVO','Seu estúdio ganhou +1 XP e 1 Insight.')))}if(type==='bug')return bug(t);if(type==='battle')return battle(t,ph);if(type==='pitch')return startPitch(t)}
 function eventModal(title,text){modal(`<div class="mh"><h2>${title}</h2></div><div class="mb"><div class="q">${text}</div><button class="btn good" onclick="closeM();next()">CONTINUAR</button></div>`)}
-function question(t,ph,kind){activeQ=pick(ph);activeQ.voteId=null;let eligible=S.teams.filter(x=>!x.blocked).map(x=>x.id);modal(`<div class="mh"><div><div class="ey">🎯 DESAFIO DE GAME DESIGN • ${ph}</div><h2>Desafio coletivo — todos os estúdios respondem</h2></div><div class="timer" id="tm">20s</div></div><div class="mb"><div class="q">${activeQ.text}</div>${activeQ.opts.map((o,i)=>`<div class="opt"><b>${LET[i]})</b> ${o}</div>`).join('')}<div class="progress"><i id="bar"></i></div><p id="prog" class="note">0/${eligible.length} responderam</p><div class="row"><button class="btn warn" onclick="closeVote()">ENCERRAR VOTAÇÃO</button></div><div id="vres"></div></div>`);$('tm').textContent='20s';socket.emit('professor:openVote',{kind,optionCount:activeQ.opts.length,correctIndex:activeQ.correct,eligibleTeamIds:eligible,duration:20},a=>{if(a?.ok&&activeQ){activeQ.voteId=a.voteId;currentVoteId=a.voteId}else toast(a?.message||'Não foi possível iniciar a votação.')})}
+function question(t,ph,kind){activeQ=pick(ph);activeQ.voteId=null;activeQ.questionToken=newVoteToken('CH');currentVoteToken=activeQ.questionToken;let eligible=S.teams.filter(x=>!x.blocked).map(x=>x.id);modal(`<div class="mh"><div><div class="ey">🎯 DESAFIO DE GAME DESIGN • ${ph}</div><h2>Desafio coletivo — todos os estúdios respondem</h2></div><div class="timer" id="tm">20s</div></div><div class="mb"><div class="q">${activeQ.text}</div>${activeQ.opts.map((o,i)=>`<div class="opt"><b>${LET[i]})</b> ${o}</div>`).join('')}<div class="progress"><i id="bar"></i></div><p id="prog" class="note">0/${eligible.length} responderam</p><p id="voters" class="note">Aguardando votos...</p><div class="row"><button class="btn warn" onclick="closeVote()">ENCERRAR VOTAÇÃO</button></div><div id="vres"></div></div>`);$('tm').textContent='20s';socket.emit('professor:openVote',{kind,questionToken:activeQ.questionToken,optionCount:activeQ.opts.length,correctIndex:activeQ.correct,eligibleTeamIds:eligible,duration:20},a=>{if(a?.ok&&activeQ&&a.questionToken===activeQ.questionToken){activeQ.voteId=a.voteId;currentVoteId=a.voteId}else toast(a?.message||'Não foi possível iniciar a votação.')})}
 function closeVote(){socket.emit('professor:closeVote')}
 socket.on('vote:tick',d=>{
- if(!currentVoteId||d.voteId!==currentVoteId)return;
+ if(!currentVoteToken||d.questionToken!==currentVoteToken)return;
  const timerEl=$('tm')||$('battleTm')||$('pitchTm');
  if(timerEl)timerEl.textContent=d.remaining>0?`${d.remaining}s`:'Corrigindo...';
 });
 socket.on('vote:progress',d=>{
- if(currentVoteId&&d.voteId&&d.voteId!==currentVoteId)return;
+ if(!currentVoteToken||d.questionToken!==currentVoteToken)return;
  if($('prog')){$('prog').textContent=`${d.count}/${d.total} responderam`;if($('bar'))$('bar').style.width=(d.total?d.count/d.total*100:0)+'%'}
  if($('battleProg'))$('battleProg').textContent=`${d.count}/${d.total} responderam`;
  if($('pitchProg'))$('pitchProg').textContent=`${d.count}/${d.total} responderam`;
+ if($('voters')){
+   const names=(d.voterIds||[]).map(id=>team(id)?.name||id);
+   $('voters').textContent=names.length?`✓ Votos recebidos: ${names.join(', ')}`:'Aguardando votos...';
+ }
  $('vp').textContent=`${d.count}/${d.total}`;
 });
 socket.on('vote:result',d=>{
  if(d.kind!=='collective')return;
- lastVote=d;if(!activeQ||!activeQ.voteId||d.voteId!==activeQ.voteId)return;
+ lastVote=d;if(!activeQ||!activeQ.questionToken||d.questionToken!==activeQ.questionToken)return;
  let correct=0;
  Object.entries(d.results).forEach(([id,r])=>{let t=team(id);if(r.correct){t.points++;correct++}});
  let current=cur(),cr=d.results[current?.id];
  if(cr&&!cr.correct)current.blocked=1;
  sync();render();
  const data={correctText:`${LET[activeQ.correct]}) ${activeQ.opts[activeQ.correct]}`,why:`${activeQ.why} • ${correct} estúdio(s) acertaram.${cr&&!cr.correct?' O estúdio da vez entrou em Crunch.':''}`};
- activeQ=null;
+ activeQ=null;currentVoteId=null;currentVoteToken=null;
  showAnswerPopup(data,()=>showRoundPodium());
 });
 
@@ -408,6 +424,8 @@ function battle(t,ph){
 
  activeQ=pick(ph);
  activeQ.voteId=null;
+ activeQ.questionToken=newVoteToken('BT');
+ currentVoteToken=activeQ.questionToken;
  window._battle=[t.id,opp.id];
 
  modal(`<div class="mh">
@@ -426,12 +444,13 @@ function battle(t,ph){
 
  socket.emit('professor:openVote',{
    kind:'battle',
+   questionToken:activeQ.questionToken,
    optionCount:activeQ.opts.length,
    correctIndex:activeQ.correct,
    eligibleTeamIds:[t.id,opp.id],
    duration:20
  },a=>{
-   if(a?.ok&&activeQ){
+   if(a?.ok&&activeQ&&a.questionToken===activeQ.questionToken){
      activeQ.voteId=a.voteId;
      currentVoteId=a.voteId;
    }else toast(a?.message||'Não foi possível iniciar a Battle.');
@@ -440,7 +459,7 @@ function battle(t,ph){
 
 socket.on('vote:result',d=>{
  if(d.kind!=='battle'||!window._battle)return;
- if(!activeQ||!activeQ.voteId||d.voteId!==activeQ.voteId)return;
+ if(!activeQ||!activeQ.questionToken||d.questionToken!==activeQ.questionToken)return;
 
  let [a,b]=window._battle;
  [a,b].forEach(id=>{
@@ -466,22 +485,22 @@ socket.on('vote:result',d=>{
  };
 
  activeQ=null;
- currentVoteId=null;
+ currentVoteId=null;currentVoteToken=null;
  window._battle=null;
  showAnswerPopup(data,()=>showRoundPodium());
 });
 
 function startPitch(t){pitch={teamId:t.id,step:0,hits:0};pitchQuestion()}
-function pitchQuestion(){let t=team(pitch.teamId);if(pitch.step>=5)return finishPitch();activeQ=pick(['CONCEITO','GAMEPLAY','PLAYTEST','PITCH','PITCH'][pitch.step]);modal(`<div class="mh"><div><div class="ey">🏰 PITCH DAY • ${pitch.step+1}/5</div><h2>${t.name} diante da Publisher</h2></div><div><div class="timer" id="pitchTm">20s</div><div class="pitchDots">${'🟢'.repeat(pitch.hits)}${'⚪'.repeat(5-pitch.hits)}</div></div></div><div class="mb"><div class="q">${activeQ.text}</div>${activeQ.opts.map((o,i)=>`<div class="opt"><b>${LET[i]})</b> ${o}</div>`).join('')}<div class="progress"><i></i></div><p id="pitchProg" class="note">Aguardando respostas...</p><div id="vres"></div><p class="note">Todos respondem para XP, mas somente o estúdio finalista conta para o Greenlight.</p></div>`);socket.emit('professor:openVote',{kind:'pitch',optionCount:activeQ.opts.length,correctIndex:activeQ.correct,eligibleTeamIds:S.teams.filter(x=>!x.blocked).map(x=>x.id),duration:20},a=>{if(a?.ok&&activeQ){activeQ.voteId=a.voteId;currentVoteId=a.voteId}else toast(a?.message||'Não foi possível iniciar o Pitch.')})}
+function pitchQuestion(){let t=team(pitch.teamId);if(pitch.step>=5)return finishPitch();activeQ=pick(['CONCEITO','GAMEPLAY','PLAYTEST','PITCH','PITCH'][pitch.step]);activeQ.voteId=null;activeQ.questionToken=newVoteToken('PT');currentVoteToken=activeQ.questionToken;modal(`<div class="mh"><div><div class="ey">🏰 PITCH DAY • ${pitch.step+1}/5</div><h2>${t.name} diante da Publisher</h2></div><div><div class="timer" id="pitchTm">20s</div><div class="pitchDots">${'🟢'.repeat(pitch.hits)}${'⚪'.repeat(5-pitch.hits)}</div></div></div><div class="mb"><div class="q">${activeQ.text}</div>${activeQ.opts.map((o,i)=>`<div class="opt"><b>${LET[i]})</b> ${o}</div>`).join('')}<div class="progress"><i></i></div><p id="pitchProg" class="note">Aguardando respostas...</p><div id="vres"></div><p class="note">Todos respondem para XP, mas somente o estúdio finalista conta para o Greenlight.</p></div>`);socket.emit('professor:openVote',{kind:'pitch',questionToken:activeQ.questionToken,optionCount:activeQ.opts.length,correctIndex:activeQ.correct,eligibleTeamIds:S.teams.filter(x=>!x.blocked).map(x=>x.id),duration:20},a=>{if(a?.ok&&activeQ&&a.questionToken===activeQ.questionToken){activeQ.voteId=a.voteId;currentVoteId=a.voteId}else toast(a?.message||'Não foi possível iniciar o Pitch.')})}
 socket.on('vote:result',d=>{
- if(d.kind!=='pitch'||!pitch.teamId)return;if(!activeQ||!activeQ.voteId||d.voteId!==activeQ.voteId)return;
+ if(d.kind!=='pitch'||!pitch.teamId)return;if(!activeQ||!activeQ.questionToken||d.questionToken!==activeQ.questionToken)return;
  Object.entries(d.results).forEach(([id,r])=>{if(r.correct)team(id).points++});
  let ok=d.results[pitch.teamId]?.correct;
  if(ok)pitch.hits++;
  pitch.step++;
  sync();render();
  const data={correctText:`${LET[activeQ.correct]}) ${activeQ.opts[activeQ.correct]}`,why:`${ok?'✅ DIMENSÃO APROVADA':'🔒 REVISÕES SOLICITADAS'} • ${activeQ.why}`};
- currentVoteId=null;showAnswerPopup(data,()=>pitchQuestion());
+ currentVoteId=null;currentVoteToken=null;showAnswerPopup(data,()=>pitchQuestion());
 });
 function finishPitch(){let t=team(pitch.teamId),ok=pitch.hits>=3;modal(`<div class="mh"><h2>${ok?'🟢 GREENLIGHT CONCEDIDO!':'🔴 GREENLIGHT NEGADO'}</h2></div><div class="mb" style="text-align:center"><div style="font-size:90px">${ok?'🏆':'🔄'}</div><div class="q">${t.name}: ${pitch.hits}/5</div><p>${ok?'A Publisher aprovou o projeto para produção.':'A Publisher solicitou ajustes. A Game Jam continua e outro estúdio ainda pode conquistar o Greenlight.'}</p>${ok?'<button class="btn good" onclick="closeM()">VER MAPA FINAL</button>':'<button class="btn warn" onclick="pitch={};closeM();next()">VOLTAR À CORRIDA</button>'}</div>`)}
 function next(){socket.emit('professor:nextTurn')}
