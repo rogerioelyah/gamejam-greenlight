@@ -117,7 +117,7 @@ linear-gradient(#13365f 0 50%,#123a35 50% 57%,#142a1c 57% 100%);}
 
 
 /* v2.6 — pino pulando casa a casa */
-.node.current .pawn{
+.pawn.hopping{
   animation:pawnHop .78s cubic-bezier(.2,.85,.35,1);
   transform-origin:center bottom;
 }
@@ -163,6 +163,7 @@ linear-gradient(#13365f 0 50%,#123a35 50% 57%,#142a1c 57% 100%);}
 <script src="/socket.io/socket.io.js"></script><script src="/questions.js"></script><script>
 const socket=io(),$=id=>document.getElementById(id),LET=['A','B','C','D'];
 let S={teams:[],turnIndex:0,started:false,turnCount:1,phase:'CONCEITO'},history=[],activeQ=null,lastVote=null,turbo=false,pitch={};
+let movingTeamId=null,currentVoteId=null;
 const TYPES=['challenge','insight','challenge','bug','challenge','battle','challenge','challenge','challenge','insight','challenge','bug','challenge','battle','challenge','challenge','challenge','insight','challenge','bug','challenge','battle','challenge','pitch'];
 const ICO={challenge:'🎯',insight:'💡',bug:'🐞',battle:'⚔️',pitch:'🏰'};
 const phaseAt=p=>p<=6?'CONCEITO':p<=12?'GAMEPLAY':p<=18?'PLAYTEST':'PITCH';
@@ -236,7 +237,7 @@ let gs=$('gmTeam');if(gs){let keep=gs.value;gs.innerHTML=S.teams.map(x=>`<option
 $('score').innerHTML=[...S.teams].sort((a,b)=>b.points-a.points||b.pos-a.pos).map((x,i)=>`<tr><td>${i+1}º <b>${x.name}</b><br><span style="color:#9fb5d4">Casa ${x.pos} • ⭐ ${x.points} ${x.blocked?'• 😵':''}</span></td></tr>`).join('');
 let tr=$('track');tr.querySelectorAll('.lane,.pathline').forEach(x=>x.remove());let W=1550;
 S.teams.forEach((x,li)=>{let top=105+li*70;let line=document.createElement('div');line.className='pathline';line.style.top=(top+34)+'px';tr.appendChild(line);let lane=document.createElement('div');lane.className='lane';lane.style.top=top+'px';lane.innerHTML=`<div class="laneLabel">${x.name}<br><span style="color:#8fa9c8">⭐ ${x.points}</span></div>`;
-for(let p=1;p<=24;p++){let nd=document.createElement('div');let type=TYPES[p-1];nd.className='node '+(x.revealed?.[p]?'reveal ':'myst ')+(p===24?'finish ':'')+(x.pos===p?'current ':'');nd.style.left=(150+(p-1)*(W-190)/23)+'px';nd.innerHTML=x.revealed?.[p]?(ICO[type]||'•'):'?';if(x.pos===p)nd.innerHTML+=`<span class="pawn">${li+1}</span>`;lane.appendChild(nd)}tr.appendChild(lane)});}
+for(let p=1;p<=24;p++){let nd=document.createElement('div');let type=TYPES[p-1];nd.className='node '+(x.revealed?.[p]?'reveal ':'myst ')+(p===24?'finish ':'')+(x.pos===p?'current ':'');nd.style.left=(150+(p-1)*(W-190)/23)+'px';nd.innerHTML=x.revealed?.[p]?(ICO[type]||'•'):'?';if(x.pos===p)nd.innerHTML+=`<span class="pawn ${movingTeamId===x.id?'hopping':''}">${li+1}</span>`;lane.appendChild(nd)}tr.appendChild(lane)});}
 function setQR(){let u=location.origin+'/aluno';$('qr').src='/qr.png?url='+encodeURIComponent(u)}
 $('qrBtn').onclick=()=>{modal(`<div class="mh"><h2>📱 Controle dos Estúdios</h2><button class="btn" onclick="closeM()">Fechar</button></div><div class="mb" style="text-align:center"><img style="width:min(420px,80vw);background:white;padding:8px;border-radius:14px" src="/qr.png?url=${encodeURIComponent(location.origin+'/aluno')}"><p>${location.origin}/aluno</p></div>`)}
 function modal(html){$('modal').innerHTML=`<div class="modalBg"><div class="modal">${html}</div></div>`}function closeM(){$('modal').innerHTML=''}
@@ -283,9 +284,20 @@ $('profRoll').onclick=()=>socket.emit('professor:roll',{},a=>{if(!a?.ok)toast(a?
 $('move').onclick=()=>{let t=cur();if(!t)return;snapshot();t.revealed=t.revealed||{};t.revealed[t.pos]=true;sync();render();land(t)}
 function land(t){let type=TYPES[t.pos-1],ph=phaseAt(t.pos);if(type==='challenge')return question(t,ph,'collective');if(type==='insight'){return applyEffect({teamId:t.id,kind:'points',amount:1},()=>applyEffect({teamId:t.id,kind:'inventory',item:'insight',amount:1},()=>eventModal('💡 INSIGHT CRIATIVO','Seu estúdio ganhou +1 XP e 1 Insight.')))}if(type==='bug')return bug(t);if(type==='battle')return battle(t,ph);if(type==='pitch')return startPitch(t)}
 function eventModal(title,text){modal(`<div class="mh"><h2>${title}</h2></div><div class="mb"><div class="q">${text}</div><button class="btn good" onclick="closeM();next()">CONTINUAR</button></div>`)}
-function question(t,ph,kind){activeQ=pick(ph);activeQ.voteId=null;let eligible=S.teams.filter(x=>!x.blocked).map(x=>x.id);modal(`<div class="mh"><div><div class="ey">🎯 DESAFIO DE GAME DESIGN • ${ph}</div><h2>Desafio coletivo — todos os estúdios respondem</h2></div><div class="timer" id="tm">20s</div></div><div class="mb"><div class="q">${activeQ.text}</div>${activeQ.opts.map((o,i)=>`<div class="opt"><b>${LET[i]})</b> ${o}</div>`).join('')}<div class="progress"><i id="bar"></i></div><p id="prog" class="note">0/${eligible.length} responderam</p><div class="row"><button class="btn warn" onclick="closeVote()">ENCERRAR VOTAÇÃO</button></div><div id="vres"></div></div>`);let s=20;$('tm').textContent=s+'s';let ti=setInterval(()=>{if(!$('tm'))return clearInterval(ti);s--;$('tm').textContent=s>0?s+'s':'Corrigindo...';if(s<=0)clearInterval(ti)},1000);socket.emit('professor:openVote',{kind,optionCount:activeQ.opts.length,correctIndex:activeQ.correct,eligibleTeamIds:eligible,duration:20},a=>{if(a?.ok&&activeQ)activeQ.voteId=a.voteId})}
+function question(t,ph,kind){activeQ=pick(ph);activeQ.voteId=null;let eligible=S.teams.filter(x=>!x.blocked).map(x=>x.id);modal(`<div class="mh"><div><div class="ey">🎯 DESAFIO DE GAME DESIGN • ${ph}</div><h2>Desafio coletivo — todos os estúdios respondem</h2></div><div class="timer" id="tm">20s</div></div><div class="mb"><div class="q">${activeQ.text}</div>${activeQ.opts.map((o,i)=>`<div class="opt"><b>${LET[i]})</b> ${o}</div>`).join('')}<div class="progress"><i id="bar"></i></div><p id="prog" class="note">0/${eligible.length} responderam</p><div class="row"><button class="btn warn" onclick="closeVote()">ENCERRAR VOTAÇÃO</button></div><div id="vres"></div></div>`);$('tm').textContent='20s';socket.emit('professor:openVote',{kind,optionCount:activeQ.opts.length,correctIndex:activeQ.correct,eligibleTeamIds:eligible,duration:20},a=>{if(a?.ok&&activeQ){activeQ.voteId=a.voteId;currentVoteId=a.voteId}else toast(a?.message||'Não foi possível iniciar a votação.')})}
 function closeVote(){socket.emit('professor:closeVote')}
-socket.on('vote:progress',d=>{if($('prog')){$('prog').textContent=`${d.count}/${d.total} responderam`;$('bar').style.width=(d.total?d.count/d.total*100:0)+'%'}$('vp').textContent=`${d.count}/${d.total}`});
+socket.on('vote:tick',d=>{
+ if(!currentVoteId||d.voteId!==currentVoteId)return;
+ const timerEl=$('tm')||$('battleTm')||$('pitchTm');
+ if(timerEl)timerEl.textContent=d.remaining>0?`${d.remaining}s`:'Corrigindo...';
+});
+socket.on('vote:progress',d=>{
+ if(currentVoteId&&d.voteId&&d.voteId!==currentVoteId)return;
+ if($('prog')){$('prog').textContent=`${d.count}/${d.total} responderam`;if($('bar'))$('bar').style.width=(d.total?d.count/d.total*100:0)+'%'}
+ if($('battleProg'))$('battleProg').textContent=`${d.count}/${d.total} responderam`;
+ if($('pitchProg'))$('pitchProg').textContent=`${d.count}/${d.total} responderam`;
+ $('vp').textContent=`${d.count}/${d.total}`;
+});
 socket.on('vote:result',d=>{
  if(d.kind!=='collective')return;
  lastVote=d;if(!activeQ||!activeQ.voteId||d.voteId!==activeQ.voteId)return;
@@ -390,28 +402,86 @@ function cancelPath(){
 }
 socket.on('game:pathResolved',r=>showPathResolved(r));
 socket.on('game:effectApplied',r=>{if(r?.message)console.log('[EFFECT]',r.message)});
-function battle(t,ph){let opp=[...S.teams].filter(x=>x.id!==t.id&&!x.blocked).sort((a,b)=>a.points-b.points||a.pos-b.pos)[0];if(!opp)return question(t,ph,'collective');activeQ=pick(ph);modal(`<div class="mh"><div><div class="ey">⚔️ GAME JAM BATTLE</div><h2>${t.name} × ${opp.name}</h2></div><div class="timer">20s</div></div><div class="mb"><div class="q">${activeQ.text}</div>${activeQ.opts.map((o,i)=>`<div class="opt"><b>${LET[i]})</b> ${o}</div>`).join('')}<div id="vres"></div></div>`);socket.emit('professor:openVote',{kind:'battle',optionCount:activeQ.opts.length,correctIndex:activeQ.correct,eligibleTeamIds:[t.id,opp.id],duration:20});window._battle=[t.id,opp.id]}
+function battle(t,ph){
+ let opp=[...S.teams].filter(x=>x.id!==t.id&&!x.blocked).sort((a,b)=>a.points-b.points||a.pos-b.pos)[0];
+ if(!opp)return question(t,ph,'collective');
+
+ activeQ=pick(ph);
+ activeQ.voteId=null;
+ window._battle=[t.id,opp.id];
+
+ modal(`<div class="mh">
+   <div><div class="ey">⚔️ GAME JAM BATTLE • ${ph}</div><h2>${t.name} × ${opp.name}</h2></div>
+   <div class="timer" id="battleTm">20s</div>
+ </div>
+ <div class="mb">
+   <div class="q">${activeQ.text}</div>
+   ${activeQ.opts.map((o,i)=>`<div class="opt"><b>${LET[i]})</b> ${o}</div>`).join('')}
+   <div class="progress"><i id="battleBar"></i></div>
+   <p id="battleProg" class="note">0/2 responderam</p>
+   <div class="result" style="background:#10243b">
+     <b>Regra da Battle:</b> quem acertar ganha +2 XP e fica liberado. Quem errar perde 1 XP e recebe Crunch, ficando fora dos próximos desafios até cumprir o bloqueio.
+   </div>
+ </div>`);
+
+ socket.emit('professor:openVote',{
+   kind:'battle',
+   optionCount:activeQ.opts.length,
+   correctIndex:activeQ.correct,
+   eligibleTeamIds:[t.id,opp.id],
+   duration:20
+ },a=>{
+   if(a?.ok&&activeQ){
+     activeQ.voteId=a.voteId;
+     currentVoteId=a.voteId;
+   }else toast(a?.message||'Não foi possível iniciar a Battle.');
+ });
+}
+
 socket.on('vote:result',d=>{
  if(d.kind!=='battle'||!window._battle)return;
+ if(!activeQ||!activeQ.voteId||d.voteId!==activeQ.voteId)return;
+
  let [a,b]=window._battle;
- [a,b].forEach(id=>{let x=team(id),r=d.results[id];if(r?.correct)x.points+=2;else{x.points=Math.max(0,x.points-1);x.blocked=1}});
+ [a,b].forEach(id=>{
+   let x=team(id),r=d.results[id];
+   if(r?.correct){
+     x.points+=2;
+     x.blocked=0; // vencedor/acertou nunca permanece bloqueado por esta Battle
+   }else{
+     x.points=Math.max(0,x.points-1);
+     x.blocked=1; // somente quem erra recebe Crunch
+   }
+ });
+
  sync();render();
- const summary=[a,b].map(id=>`${team(id).name}: ${d.results[id]?.correct?'acertou (+2 XP)':'errou (-1 XP + Crunch)'}`).join(' • ');
- const data={correctText:`${LET[activeQ.correct]}) ${activeQ.opts[activeQ.correct]}`,why:`${activeQ.why} • ${summary}`};
+ const summary=[a,b].map(id=>{
+   const won=d.results[id]?.correct;
+   return `${team(id).name}: ${won?'✅ acertou (+2 XP, liberado)':'❌ errou (-1 XP + Crunch)'}`;
+ }).join(' • ');
+
+ const data={
+   correctText:`${LET[activeQ.correct]}) ${activeQ.opts[activeQ.correct]}`,
+   why:`${activeQ.why} • ${summary}`
+ };
+
+ activeQ=null;
+ currentVoteId=null;
  window._battle=null;
  showAnswerPopup(data,()=>showRoundPodium());
 });
+
 function startPitch(t){pitch={teamId:t.id,step:0,hits:0};pitchQuestion()}
-function pitchQuestion(){let t=team(pitch.teamId);if(pitch.step>=5)return finishPitch();activeQ=pick(['CONCEITO','GAMEPLAY','PLAYTEST','PITCH','PITCH'][pitch.step]);modal(`<div class="mh"><div><div class="ey">🏰 PITCH DAY • ${pitch.step+1}/5</div><h2>${t.name} diante da Publisher</h2></div><div class="pitchDots">${'🟢'.repeat(pitch.hits)}${'⚪'.repeat(5-pitch.hits)}</div></div><div class="mb"><div class="q">${activeQ.text}</div>${activeQ.opts.map((o,i)=>`<div class="opt"><b>${LET[i]})</b> ${o}</div>`).join('')}<div id="vres"></div><p class="note">Todos respondem para XP, mas somente o estúdio finalista conta para o Greenlight.</p></div>`);socket.emit('professor:openVote',{kind:'pitch',optionCount:activeQ.opts.length,correctIndex:activeQ.correct,eligibleTeamIds:S.teams.filter(x=>!x.blocked).map(x=>x.id),duration:20})}
+function pitchQuestion(){let t=team(pitch.teamId);if(pitch.step>=5)return finishPitch();activeQ=pick(['CONCEITO','GAMEPLAY','PLAYTEST','PITCH','PITCH'][pitch.step]);modal(`<div class="mh"><div><div class="ey">🏰 PITCH DAY • ${pitch.step+1}/5</div><h2>${t.name} diante da Publisher</h2></div><div><div class="timer" id="pitchTm">20s</div><div class="pitchDots">${'🟢'.repeat(pitch.hits)}${'⚪'.repeat(5-pitch.hits)}</div></div></div><div class="mb"><div class="q">${activeQ.text}</div>${activeQ.opts.map((o,i)=>`<div class="opt"><b>${LET[i]})</b> ${o}</div>`).join('')}<div class="progress"><i></i></div><p id="pitchProg" class="note">Aguardando respostas...</p><div id="vres"></div><p class="note">Todos respondem para XP, mas somente o estúdio finalista conta para o Greenlight.</p></div>`);socket.emit('professor:openVote',{kind:'pitch',optionCount:activeQ.opts.length,correctIndex:activeQ.correct,eligibleTeamIds:S.teams.filter(x=>!x.blocked).map(x=>x.id),duration:20},a=>{if(a?.ok&&activeQ){activeQ.voteId=a.voteId;currentVoteId=a.voteId}else toast(a?.message||'Não foi possível iniciar o Pitch.')})}
 socket.on('vote:result',d=>{
- if(d.kind!=='pitch'||!pitch.teamId)return;
+ if(d.kind!=='pitch'||!pitch.teamId)return;if(!activeQ||!activeQ.voteId||d.voteId!==activeQ.voteId)return;
  Object.entries(d.results).forEach(([id,r])=>{if(r.correct)team(id).points++});
  let ok=d.results[pitch.teamId]?.correct;
  if(ok)pitch.hits++;
  pitch.step++;
  sync();render();
  const data={correctText:`${LET[activeQ.correct]}) ${activeQ.opts[activeQ.correct]}`,why:`${ok?'✅ DIMENSÃO APROVADA':'🔒 REVISÕES SOLICITADAS'} • ${activeQ.why}`};
- showAnswerPopup(data,()=>pitchQuestion());
+ currentVoteId=null;showAnswerPopup(data,()=>pitchQuestion());
 });
 function finishPitch(){let t=team(pitch.teamId),ok=pitch.hits>=3;modal(`<div class="mh"><h2>${ok?'🟢 GREENLIGHT CONCEDIDO!':'🔴 GREENLIGHT NEGADO'}</h2></div><div class="mb" style="text-align:center"><div style="font-size:90px">${ok?'🏆':'🔄'}</div><div class="q">${t.name}: ${pitch.hits}/5</div><p>${ok?'A Publisher aprovou o projeto para produção.':'A Publisher solicitou ajustes. A Game Jam continua e outro estúdio ainda pode conquistar o Greenlight.'}</p>${ok?'<button class="btn good" onclick="closeM()">VER MAPA FINAL</button>':'<button class="btn warn" onclick="pitch={};closeM();next()">VOLTAR À CORRIDA</button>'}</div>`)}
 function next(){socket.emit('professor:nextTurn')}
@@ -460,10 +530,14 @@ socket.on('game:rolled',d=>{
 });
 socket.on('game:step',d=>{
  closeM();
+ movingTeamId=d.teamId;
  render();
  toast(`🚶 ${team(d.teamId)?.name||'Estúdio'} • passo ${d.step} de ${d.totalSteps} • Casa ${d.pos}`);
+ clearTimeout(window.__pawnHopTimer);
+ window.__pawnHopTimer=setTimeout(()=>{movingTeamId=null;render()},780);
 });
 socket.on('game:moved',d=>{
+ movingTeamId=null;clearTimeout(window.__pawnHopTimer);
  setTimeout(()=>{
    let t=team(d.teamId);
    if(!t)return;

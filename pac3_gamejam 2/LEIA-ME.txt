@@ -90,3 +90,17 @@ v2.4 — FLUXO TEMPORAL CORRIGIDO
 - Votação antiga é cancelada silenciosamente, impedindo resposta anterior de aparecer sobre pergunta nova.
 - Resultado é vinculado ao voteId da pergunta atual.
 - 28/28 testes de sintaxe, regressão e simulação temporal passaram.
+
+
+v2.7 — TIMER AUTORITATIVO + REGRA DA BATTLE
+- Cronômetro de 20 segundos passou a ser controlado pelo servidor.
+- Desafio, Battle e Pitch recebem ticks de tempo reais.
+- Battle mostra o progresso de respostas.
+- Quem acerta a Battle: +2 XP e fica liberado.
+- Quem erra a Battle: -1 XP e recebe Crunch.
+- Se ambos acertam, ninguém é bloqueado.
+- Se ambos erram, ambos recebem Crunch.
+- Equipes bloqueadas ficam fora dos desafios até cumprir o Crunch.
+- Apenas o pino do participante da jogada executa a animação de salto.
+- Banco de questões validado: 38 questões (10 Conceito, 10 Gameplay, 10 Playtest, 8 Pitch).
+- 41/41 testes de sintaxe, dados, regras e regressão passaram.

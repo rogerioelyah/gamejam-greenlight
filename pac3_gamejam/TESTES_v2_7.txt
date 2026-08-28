@@ -1,0 +1,55 @@
+PAC III — GAME JAM — RELATÓRIO DE TESTES v2.7
+
+Correções:
+- Cronômetro passou a ser controlado pelo servidor e enviado às telas por vote:tick.
+- Desafio, Game Jam Battle e Pitch Day exibem cronômetro real de 20s.
+- Battle mostra quantidade de respostas recebidas.
+- Regra de bloqueio da Battle corrigida: somente quem ERRA recebe Crunch.
+- Quem ACERTA a Battle recebe +2 XP e fica explicitamente desbloqueado.
+- Equipe em Crunch continua fora dos desafios até o bloqueio ser cumprido.
+- Apenas o pino da equipe que está jogando recebe a animação de salto.
+- Banco de questões validado: 38 questões carregando corretamente.
+
+RESULTADO: 41/41 TESTES PASS
+
+PASS — Sintaxe server.js
+PASS — Sintaxe questions.js
+PASS — Sintaxe JS professor
+PASS — Sintaxe JS aluno
+PASS — Banco de questões carrega — {'count': 38, 'phases': {'CONCEITO': 10, 'GAMEPLAY': 10, 'PLAYTEST': 10, 'PITCH': 8}, 'bad': 0}
+PASS — Banco possui dados válidos — {'count': 38, 'phases': {'CONCEITO': 10, 'GAMEPLAY': 10, 'PLAYTEST': 10, 'PITCH': 8}, 'bad': 0}
+PASS — Há questões para CONCEITO — {'CONCEITO': 10, 'GAMEPLAY': 10, 'PLAYTEST': 10, 'PITCH': 8}
+PASS — Há questões para GAMEPLAY — {'CONCEITO': 10, 'GAMEPLAY': 10, 'PLAYTEST': 10, 'PITCH': 8}
+PASS — Há questões para PLAYTEST — {'CONCEITO': 10, 'GAMEPLAY': 10, 'PLAYTEST': 10, 'PITCH': 8}
+PASS — Há questões para PITCH — {'CONCEITO': 10, 'GAMEPLAY': 10, 'PLAYTEST': 10, 'PITCH': 8}
+PASS — Servidor cria endsAt da votação
+PASS — Servidor emite vote:tick
+PASS — Tick roda a cada 250ms
+PASS — Votação fecha aos 20s do servidor
+PASS — Professor exibe tick do servidor
+PASS — Desafio tem cronômetro visível
+PASS — Battle tem cronômetro visível
+PASS — Pitch tem cronômetro visível
+PASS — Battle: acerto dá +2 XP
+PASS — Battle: acerto remove bloqueio
+PASS — Battle: erro perde 1 XP
+PASS — Battle: somente erro aplica Crunch
+PASS — Battle explica regra na tela
+PASS — Battle resultado vinculado ao voteId
+PASS — Controle movingTeamId existe
+PASS — Somente pawn com .hopping anima
+PASS — Render marca hopping só no teamId ativo
+PASS — Pawn atual não tem animação genérica — ['transform:translateY(-4px) scale(1.13);box-shadow:0 0 0 5px #32d5ff22,0 6px 14px #0008']
+PASS — Dado D6 preservado
+PASS — Dado gira 5s
+PASS — Movimento 900ms por casa
+PASS — Desafio dura 20s
+PASS — Alteração de voto preservada
+PASS — Pódio auto-avança
+PASS — Crunch automático preservado
+PASS — Kickoff 2–7 preservado
+PASS — Pitch 3/5 preservado
+PASS — Simulação Battle: ambos acertam — blocked=(0, 0)
+PASS — Simulação Battle: A acerta / B erra — blocked=(0, 1)
+PASS — Simulação Battle: A erra / B acerta — blocked=(1, 0)
+PASS — Simulação Battle: ambos erram — blocked=(1, 1)
