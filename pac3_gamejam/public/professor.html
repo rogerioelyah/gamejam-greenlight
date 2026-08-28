@@ -62,6 +62,14 @@ linear-gradient(#13365f 0 50%,#123a35 50% 57%,#142a1c 57% 100%);}
 #podiumClose{margin-top:22px;min-width:220px}
 @media(max-width:650px){#podium{gap:7px}.pod{width:32%}.pod .team{font-size:14px}.p1 .block{height:180px}.p2 .block{height:140px}.p3 .block{height:105px}}
 
+
+/* v2.3 — sequência visual do dado e caminhada do pino */
+.pawn{transition:transform .18s ease,box-shadow .18s ease}
+.node.current .pawn{transform:translateY(-4px) scale(1.13);box-shadow:0 0 0 5px #32d5ff22,0 6px 14px #0008}
+.diceResult{font-size:clamp(110px,18vw,230px);line-height:1;margin:8px 0 4px;filter:drop-shadow(0 14px 18px #0008)}
+.diceNumber{font-size:clamp(48px,7vw,92px);font-weight:1000;color:#fde68a;margin:0}
+.diceMoveText{font-size:clamp(20px,2vw,30px);color:#cbd5e1;margin-top:10px}
+
 </style></head><body>
 <header class="top"><div class="brand">🎮 PAC III — <span>GAME JAM: CORRIDA PELO GREENLIGHT</span><small>Jogos Digitais Educacionais • Game Master</small></div><div class="row"><button class="btn" id="qrBtn">📱 QR</button><button class="btn" id="undo">↩ Desfazer</button><button class="btn" id="reset">↻ Reiniciar</button></div></header>
 <section id="setup" class="setup"><div class="card"><div class="ey">Kickoff da Game Jam</div><h1>7 estúdios. 4 mundos. 1 Greenlight.</h1><p>Cada equipe controla um estúdio pelo celular. O dado define a oportunidade; conhecimento, desafios e Power-Ups definem a estratégia. Configure os estúdios presentes.</p><div class="row"><b>Estúdios:</b><select id="count" class="btn"></select><button class="btn" id="apply">APLICAR</button></div><div id="names" class="names"></div><button class="btn primary" id="start">🚀 INICIAR GAME JAM</button></div></section>
@@ -100,6 +108,17 @@ const TYPES=['challenge','insight','challenge','bug','challenge','battle','chall
 const ICO={challenge:'🎯',insight:'💡',bug:'🐞',battle:'⚔️',pitch:'🏰'};
 const phaseAt=p=>p<=6?'CONCEITO':p<=12?'GAMEPLAY':p<=18?'PLAYTEST':'PITCH';
 function toast(x){$('toast').textContent=x;$('toast').classList.remove('hidden');setTimeout(()=>$('toast').classList.add('hidden'),2400)}
+const DICE_FACE={1:'⚀',2:'⚁',3:'⚂',4:'⚃',5:'⚄',6:'⚅'};
+function showDiceResult(d){
+ modal(`<div class="mh"><div><div class="ey">🎲 RESULTADO DO DADO</div><h2>${team(d.teamId)?.name||'Estúdio'}</h2></div></div>
+ <div class="mb" style="display:grid;place-items:center;text-align:center">
+   <div class="diceResult">${DICE_FACE[d.value]||'🎲'}</div>
+   <div class="diceNumber">${d.value}</div>
+   <div class="diceMoveText">Prepare-se: o pino vai avançar ${Math.max(0,(d.target??d.to)-d.from)} casa(s).</div>
+ </div>`);
+ clearTimeout(window.__diceResultTimer);
+ window.__diceResultTimer=setTimeout(()=>closeM(),d.displayMs||1700);
+}
 function showCrunchReleased(d){
  modal(`<div class="mh"><div><div class="ey">CRUNCH CONSUMIDO</div><h2>🔓 ESTÚDIO DESBLOQUEADO</h2></div></div>
  <div class="mb" style="display:grid;place-items:center;text-align:center">
@@ -329,14 +348,24 @@ function applyServerState(g){
 }
 socket.on('game:reset',()=>{S={teams:[],turnIndex:0,started:false,turnCount:1,phase:'CONCEITO'};history=[];activeQ=null;lastVote=null;pitch={};turbo=false;closeM();$('game').classList.add('hidden');$('setup').classList.remove('hidden');setup(+$('count').value);toast('🏁 Partida encerrada. Configure os estúdios e clique em INICIAR GAME JAM para o novo jogo.');});
 socket.on('game:state',g=>applyServerState(g));
-socket.on('game:rolled',d=>{if(team(d.teamId)){toast(`🎲 ${team(d.teamId).name} rolou ${d.value} • Casa ${d.from} → ${d.to}`);render()}});
+socket.on('game:rolled',d=>{
+ if(team(d.teamId)){
+   showDiceResult(d);
+   render();
+ }
+});
+socket.on('game:step',d=>{
+ closeM();
+ render();
+ toast(`🚶 ${team(d.teamId)?.name||'Estúdio'} • ${d.step}/${d.totalSteps} • Casa ${d.pos}`);
+});
 socket.on('game:moved',d=>{
  setTimeout(()=>{
    let t=team(d.teamId);
    if(!t)return;
    render();
    land(t);
- },350);
+ },180);
 });
 socket.on('game:crunchReleased',d=>showCrunchReleased(d));
 socket.on('game:powerRequest',d=>toast(`🎒 ${team(d.teamId)?.name||'Estúdio'} quer usar ${d.power}.`));

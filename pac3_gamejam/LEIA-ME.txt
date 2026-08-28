@@ -69,3 +69,12 @@ v2.2 — CORREÇÃO DO KICKOFF + REGRESSÃO
 - Texto do Kickoff atualizado: sem referência a rotas/bifurcações.
 - Resíduos da antiga bifurcação removidos do controle do aluno.
 - Pacote validado por testes de sintaxe, smoke test de UI e verificações de regressão.
+
+
+v2.3 — DADO + CAMINHADA ANIMADA
+- Ao rolar, o resultado do D6 aparece em tela cheia por aproximadamente 1,7 segundo.
+- Depois o painel volta automaticamente ao mapa.
+- O pino avança uma casa por vez, com cerca de 430 ms entre passos.
+- A casa de destino só é resolvida após terminar o deslocamento.
+- Fluxo automático de Crunch, Desafios, Pódio e Pitch Day preservado.
+- Pacote validado em 18 testes de regressão.

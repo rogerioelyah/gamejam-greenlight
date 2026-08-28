@@ -57,20 +57,68 @@ function rollCurrent(ack){
  const t=current();
  if(!game.started||!t)return ack&&ack({ok:false,message:'A partida ainda não foi iniciada.'});
  if(t.blocked)return ack&&ack({ok:false,message:'O Crunch será consumido automaticamente quando chegar o turno.'});
+ if(t.moving||t.pendingRoll)return ack&&ack({ok:false,message:'O estúdio já está em movimento.'});
 
  const n=1+Math.floor(Math.random()*6);
  const from=t.pos||1;
- const to=Math.min(24,from+n);
+ const target=Math.min(24,from+n);
+ const session=game.sessionId;
 
- t.pendingRoll=null;
- t.pos=to;
- t.revealed=t.revealed||{};
- t.revealed[to]=true;
-
+ t.pendingRoll=n;
+ t.moving=true;
  emitGame();
- io.emit('game:rolled',{teamId:t.id,value:n,from,to});
- io.emit('game:moved',{teamId:t.id,roll:n,from,to});
- ack&&ack({ok:true,value:n,from,to});
+
+ // 1) Primeiro todos veem o resultado do dado.
+ io.emit('game:rolled',{teamId:t.id,value:n,from,target,displayMs:1700});
+ ack&&ack({ok:true,value:n,from,to:target});
+
+ // 2) Depois da tela do dado, o pino anda uma casa por vez.
+ setTimeout(()=>{
+   if(game.sessionId!==session)return;
+   const live=game.teams.find(x=>x.id===t.id);
+   if(!live||!live.moving)return;
+
+   const actualSteps=Math.max(0,target-from);
+   if(actualSteps===0){
+     live.pendingRoll=null;live.moving=false;
+     live.revealed=live.revealed||{};live.revealed[live.pos]=true;
+     emitGame();
+     io.emit('game:moved',{teamId:live.id,roll:n,from,to:live.pos});
+     return;
+   }
+
+   let step=0;
+   const walk=()=>{
+     if(game.sessionId!==session)return;
+     const currentTeam=game.teams.find(x=>x.id===t.id);
+     if(!currentTeam||!currentTeam.moving)return;
+
+     step++;
+     currentTeam.pos=Math.min(target,from+step);
+     emitGame();
+     io.emit('game:step',{
+       teamId:currentTeam.id,
+       roll:n,
+       step,
+       totalSteps:actualSteps,
+       pos:currentTeam.pos,
+       from,
+       target
+     });
+
+     if(step<actualSteps){
+       setTimeout(walk,430);
+     }else{
+       currentTeam.pendingRoll=null;
+       currentTeam.moving=false;
+       currentTeam.revealed=currentTeam.revealed||{};
+       currentTeam.revealed[currentTeam.pos]=true;
+       emitGame();
+       setTimeout(()=>io.emit('game:moved',{teamId:currentTeam.id,roll:n,from,to:currentTeam.pos}),250);
+     }
+   };
+   walk();
+ },1700);
 }
 function activateCurrentPath(teamId,ack){
  const t=current();
