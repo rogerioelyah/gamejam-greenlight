@@ -1,0 +1,35 @@
+PAC III — GAME JAM — v3.0.0-sync-diagnostic
+
+OBJETIVO
+Eliminar falhas silenciosas de sincronização e permitir diagnóstico antes do uso em turma.
+
+CORREÇÕES
+- Painel de votantes visível no projetor.
+- Voto só conta quando confirmado pelo servidor.
+- questionToken acompanha abertura, progresso, timer e resultado.
+- Cronômetro de 20s controlado pelo servidor.
+- Trace permanente em professor e aluno.
+- Endpoint /healthz informa versão e estado atual.
+- Cache desativado para evitar professor/aluno carregarem HTML/JS antigo após deploy.
+- Handshake de versão entre cliente e servidor. Se forem diferentes, a tela avisa e bloqueia o uso silencioso de versões misturadas.
+
+DIAGNÓSTICO DA INSTALAÇÃO ATUAL
+O repositório GitHub main consultado antes desta versão ainda não continha voterHTML/painel de votantes e o server.js ainda não continha o Trace completo. Isso indica que a versão testada no Render não correspondia ao último pacote gerado.
+
+TESTES
+20/20 PASS:
+- sintaxe servidor
+- sintaxe professor
+- sintaxe aluno
+- banco de questões
+- versão/health
+- no-cache
+- handshake de versão
+- trace
+- votantes
+- confirmação de voto
+- timer 20s
+- resultado por token
+- regra Battle
+- dado 5s
+- movimento 900ms

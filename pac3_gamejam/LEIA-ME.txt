@@ -104,3 +104,27 @@ v2.7 — TIMER AUTORITATIVO + REGRA DA BATTLE
 - Apenas o pino do participante da jogada executa a animação de salto.
 - Banco de questões validado: 38 questões (10 Conceito, 10 Gameplay, 10 Playtest, 8 Pitch).
 - 41/41 testes de sintaxe, dados, regras e regressão passaram.
+
+
+v2.8 — SINCRONIZAÇÃO + TRACE PERMANENTE
+- Corrigida corrida de eventos entre vote:open, ACK, vote:tick, vote:progress e vote:result.
+- Cada pergunta usa questionToken conhecido pela tela antes da abertura da votação.
+- Celular recebe confirmação explícita de voto aceito pelo servidor.
+- Professor mostra os estúdios cujos votos chegaram ao servidor.
+- Resultado só é processado quando pertence à pergunta atual.
+- Adicionado TRACE discreto e permanente em professor e aluno.
+- O pequeno ponto no canto inferior esquerdo abre o diagnóstico.
+- Trace registra Socket.IO, votos, timer, dado, movimento e erros JS.
+- Botão Copiar facilita enviar o diagnóstico para análise.
+- 31/31 testes de regressão passaram.
+
+
+v2.9 — PAINEL DE VOTANTES + SINCRONIZAÇÃO
+- Todos os estúdios elegíveis aparecem na pergunta.
+- Quando o servidor recebe um voto, o estúdio recebe ✓ no projetor.
+- Professor vê nomes dos estúdios que já votaram.
+- Celular confirma explicitamente que o voto foi computado pelo servidor.
+- Snapshot final de votantes é enviado antes do resultado.
+- Desafio, Battle e Pitch usam o mesmo fluxo.
+- A alternativa individual permanece secreta até a correção.
+- 24/24 testes de regressão passaram.

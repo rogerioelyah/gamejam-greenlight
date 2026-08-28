@@ -1,7 +1,17 @@
 <!doctype html><html lang="pt-BR"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1,maximum-scale=1"><title>PAC III — Controle do Estúdio</title><style>
 :root{--bg:#071326;--p:#0d1e36;--b:#29496d;--t:#f6fbff;--m:#9fb5d4;--c:#32d5ff;--g:#4ade80;--y:#ffd166}
 *{box-sizing:border-box}body{margin:0;background:radial-gradient(circle at top,#16365d,#071326 50%);color:var(--t);font-family:Inter,system-ui,sans-serif;min-height:100vh}main{max-width:620px;margin:auto;padding:14px}.card{background:#0a192e;border:1px solid var(--b);border-radius:19px;padding:17px;margin-bottom:11px}h1{font-size:24px;margin:4px 0 12px}.muted{color:var(--m);font-size:12px}select,button{font:inherit}select{width:100%;padding:14px;border-radius:12px;background:#112943;color:white;border:1px solid var(--b)}button{border:0;border-radius:15px;color:white;font-weight:1000}.join{width:100%;padding:14px;margin-top:9px;background:#087ea4}.turn{padding:18px;width:100%;background:#176b3a;font-size:19px}.turn:disabled{opacity:.35}.answers{display:grid;grid-template-columns:1fr 1fr;gap:9px}.ans{height:95px;font-size:38px;background:#173a58;border:2px solid #315b7f}.ans.sel{outline:4px solid var(--y);background:#4a4618}.ans:disabled{opacity:.3}.metrics{display:grid;grid-template-columns:repeat(3,1fr);gap:7px}.metric{text-align:center;background:#10243c;border:1px solid var(--b);padding:9px;border-radius:11px}.metric b{display:block;font-size:23px}.powers{display:flex;gap:7px;flex-wrap:wrap}.power{padding:10px;background:#4d3572}.path{display:grid;grid-template-columns:1fr 1fr;gap:8px}.path button{padding:16px;background:#31506e}.status{font-weight:900;margin-top:8px}.ok{color:#86efac}.wait{color:#fde68a}
-</style></head><body>
+
+.traceFab{position:fixed;left:4px;bottom:4px;z-index:1200;width:18px;height:18px;border-radius:50%;border:0;background:#ffffff10;color:#ffffff30;font-size:9px;padding:0;cursor:pointer;opacity:.20}
+.traceFab:hover{opacity:.75}
+.tracePanel{position:fixed;left:8px;bottom:28px;z-index:1201;width:min(560px,92vw);max-height:70vh;background:#02070fef;border:1px solid #29436a;border-radius:12px;display:none;box-shadow:0 22px 70px #000c;overflow:hidden}
+.tracePanel.show{display:block}
+.traceHead{display:flex;justify-content:space-between;align-items:center;padding:9px 10px;border-bottom:1px solid #29436a;font-size:12px}
+.traceBody{padding:8px;max-height:55vh;overflow:auto;font-family:ui-monospace,SFMono-Regular,Menlo,monospace;font-size:10px;white-space:pre-wrap;word-break:break-word;color:#b9d7ff}
+.traceActions{display:flex;gap:6px;padding:8px;border-top:1px solid #29436a}
+.traceActions button{font-size:10px;padding:6px 8px}
+
+</style></head><body><div id="appVersion" style="position:fixed;right:4px;bottom:3px;opacity:.18;font-size:8px;z-index:999">v3.0.0-sync-diagnostic</div>
 <button id="traceFab" class="traceFab" title="">·</button>
 <div id="tracePanel" class="tracePanel">
   <div class="traceHead"><b>TRACE</b><span id="traceStatus">live</span></div>
@@ -18,7 +28,9 @@
 <div class="card"><div class="muted">Playtest / Questão</div><h1 id="voteTitle">Aguardando questão</h1><div class="answers" id="answers"></div><div id="voteMsg" class="status wait">Os botões serão liberados quando seu estúdio puder responder.</div></div>
 <div class="card"><div class="muted">Meu estúdio</div><div class="metrics"><div class="metric">XP<b id="pts">—</b></div><div class="metric">Casa<b id="pos">—</b></div><div class="metric">Mundo<b id="world">—</b></div></div><div class="powers" style="margin-top:10px"><button class="power" data-power="insight">💡 Insight <span id="pi">0</span></button><button class="power" data-power="hotfix">🔧 Hotfix <span id="ph">0</span></button><button class="power" data-power="pivot">🔄 Pivot <span id="pp">0</span></button></div><div id="myStatus" class="status"></div></div>
 </main><script src="/socket.io/socket.io.js"></script><script>
-const socket=io(),$=id=>document.getElementById(id);let my=localStorage.getItem('pac3StudioId')||null,g=null,vote=null,choice=null;
+const socket=io(),$=id=>document.getElementById(id)
+const CLIENT_VERSION='3.0.0-sync-diagnostic';
+let SERVER_VERSION=null;let my=localStorage.getItem('pac3StudioId')||null,g=null,vote=null,choice=null;
 function answers(n=4){$('answers').innerHTML=['A','B','C','D'].slice(0,n).map((x,i)=>`<button class="ans" data-i="${i}" disabled>${x}</button>`).join('');document.querySelectorAll('.ans').forEach(b=>b.onclick=()=>cast(+b.dataset.i))}
 answers();
 function me(){return g?.teams?.find(t=>t.id===my)}function phase(p){return p<=6?'1':p<=12?'2':p<=18?'3':'4'}
@@ -39,9 +51,59 @@ function cast(i){
      $('voteMsg').textContent=a?.message||'Erro ao registrar voto.';
      return;
    }
-   $('voteMsg').textContent=`✅ Voto ${['A','B','C','D'][i]} registrado (${a.count}/${a.total}). Você ainda pode alterar.`;
+   $('voteMsg').textContent=`✅ Voto ${['A','B','C','D'][i]} computado pelo servidor (${a.count}/${a.total}). Você ainda pode alterar.`;
  });
 }
 socket.on('connect',()=>socket.emit('student:hello',{teamId:my}));
 socket.on('game:reset',()=>{localStorage.removeItem('pac3StudioId');my=null;vote=null;choice=null;$('join').style.display='block';$('locked').style.display='none';$('turnTitle').textContent='Aguardando nova partida...';$('turnMsg').textContent='O Game Master reiniciou a Game Jam.';answers();applyVote()});
-socket.on('game:state',x=>{g=x;render()});socket.on('game:diceRolling',d=>{if(d.teamId===my)$('turnMsg').textContent='🎲 Dado girando... aguarde o resultado.';});socket.on('game:rolled',d=>{if(d.teamId===my)$('turnMsg').textContent=`🎲 Resultado: ${d.value}. Acompanhe o pino andando no projetor.`;});socket.on('game:step',d=>{if(d.teamId===my)$('turnMsg').textContent=`🚶 Movendo: ${d.step}/${d.totalSteps} • Casa ${d.pos}`;});socket.on('game:crunchReleased',d=>{if(d.teamId===my){$('turnMsg').textContent='🔓 Crunch consumido. Você perdeu este turno e está desbloqueado.';$('myStatus').textContent='🟢 Desbloqueado';}});socket.on('vote:open',x=>{vote=x;choice=x.currentChoices&&Object.prototype.hasOwnProperty.call(x.currentChoices,my)?+x.currentChoices[my]:null;answers(x.optionCount||4);applyVote()});socket.on('vote:accepted',d=>{if(d.teamId===my&&vote?.voteId===d.voteId)$('voteMsg').textContent=`✅ Voto recebido pelo servidor (${d.count}/${d.total}). Você pode alterar enquanto o tempo estiver aberto.`;});socket.on('vote:closed',()=>{vote=null;choice=null;applyVote()});</script></body></html>
+socket.on('game:state',x=>{g=x;render()});socket.on('game:diceRolling',d=>{if(d.teamId===my)$('turnMsg').textContent='🎲 Dado girando... aguarde o resultado.';});socket.on('game:rolled',d=>{if(d.teamId===my)$('turnMsg').textContent=`🎲 Resultado: ${d.value}. Acompanhe o pino andando no projetor.`;});socket.on('game:step',d=>{if(d.teamId===my)$('turnMsg').textContent=`🚶 Movendo: ${d.step}/${d.totalSteps} • Casa ${d.pos}`;});socket.on('game:crunchReleased',d=>{if(d.teamId===my){$('turnMsg').textContent='🔓 Crunch consumido. Você perdeu este turno e está desbloqueado.';$('myStatus').textContent='🟢 Desbloqueado';}});socket.on('vote:open',x=>{vote=x;choice=x.currentChoices&&Object.prototype.hasOwnProperty.call(x.currentChoices,my)?+x.currentChoices[my]:null;answers(x.optionCount||4);applyVote()});socket.on('vote:accepted',d=>{if(d.teamId===my&&vote?.voteId===d.voteId)$('voteMsg').textContent=`✅ Voto recebido pelo servidor (${d.count}/${d.total}). Você pode alterar enquanto o tempo estiver aberto.`;});socket.on('vote:closed',()=>{vote=null;choice=null;applyVote()});
+let localTrace=[];
+function addTrace(type,data={}){
+ const item={ts:new Date().toISOString(),type,data};
+ localTrace.push(item);
+ if(localTrace.length>300)localTrace=localTrace.slice(-300);
+ renderTrace();
+}
+function renderTrace(){
+ const el=$('traceBody');if(!el)return;
+ el.textContent=localTrace.map(x=>`[${x.ts}] ${x.type}\n${JSON.stringify(x.data,null,2)}`).join('\n\n');
+ el.scrollTop=el.scrollHeight;
+}
+function requestTrace(){
+ socket.emit('trace:request',{},r=>{
+   if(!r?.ok)return addTrace('trace:error',r||{});
+   localTrace=[...(r.items||[])];
+   localTrace.push({ts:new Date().toISOString(),type:'trace:snapshot',data:{game:r.game,vote:r.vote}});
+   renderTrace();
+ });
+}
+$('traceFab').onclick=()=>{$('tracePanel').classList.toggle('show');if($('tracePanel').classList.contains('show'))requestTrace()};
+$('traceRefresh').onclick=()=>requestTrace();
+$('traceClose').onclick=()=>$('tracePanel').classList.remove('show');
+$('traceClear').onclick=()=>{localTrace=[];renderTrace()};
+$('traceCopy').onclick=async()=>{
+ requestTrace();
+ setTimeout(async()=>{
+   const txt=$('traceBody').textContent;
+   try{await navigator.clipboard.writeText(txt);$('traceStatus').textContent='copiado'}catch(e){$('traceStatus').textContent='copie manualmente'}
+   setTimeout(()=>$('traceStatus').textContent='live',1400);
+ },120);
+};
+socket.on('trace:event',x=>{localTrace.push(x);if(localTrace.length>300)localTrace=localTrace.slice(-300);renderTrace()});
+socket.on('trace:snapshot',items=>{if(Array.isArray(items)){localTrace=items.slice(-300);renderTrace()}});
+window.addEventListener('error',e=>addTrace('window:error',{message:e.message,source:e.filename,line:e.lineno,col:e.colno,stack:e.error?.stack||null}));
+window.addEventListener('unhandledrejection',e=>addTrace('promise:rejection',{reason:String(e.reason),stack:e.reason?.stack||null}));
+
+
+socket.on('app:version',d=>{
+ SERVER_VERSION=d?.version||'desconhecida';
+ addTrace('app:version',{client:CLIENT_VERSION,server:SERVER_VERSION});
+ if(SERVER_VERSION!==CLIENT_VERSION){
+   const msg=`VERSÃO INCOMPATÍVEL: tela ${CLIENT_VERSION} × servidor ${SERVER_VERSION}. Recarregue a página após confirmar o deploy no Render.`;
+   console.error(msg);
+   addTrace('version:mismatch',{client:CLIENT_VERSION,server:SERVER_VERSION});
+   $('turnMsg').textContent='⚠️ '+msg;
+ }
+});
+
+</script></body></html>

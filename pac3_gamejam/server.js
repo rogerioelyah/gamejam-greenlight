@@ -6,11 +6,22 @@ const QRCode=require('qrcode');
 const {Server}=require('socket.io');
 const app=express(), server=http.createServer(app), io=new Server(server);
 const PORT=process.env.PORT||3000;
+const APP_VERSION='3.0.0-sync-diagnostic';
 let game={teams:[],turnIndex:0,started:false,turnCount:1,phase:'CONCEITO',sessionId:Date.now()};
+let traceLog=[];
+function trace(type,data={}){
+  const item={ts:new Date().toISOString(),type,data};
+  traceLog.push(item);
+  if(traceLog.length>300)traceLog=traceLog.slice(-300);
+  io.emit('trace:event',item);
+}
+
 let vote=null,timer=null,voteTick=null;
 
+app.use((req,res,next)=>{res.set('Cache-Control','no-store, no-cache, must-revalidate, proxy-revalidate');res.set('Pragma','no-cache');res.set('Expires','0');next()});
 app.use(express.static('public'));
 app.get('/',(_,res)=>res.redirect('/professor.html'));
+app.get('/healthz',(_,res)=>res.json({ok:true,version:APP_VERSION,started:game.started,teams:game.teams.length,vote:pubVote()}));
 app.get('/aluno',(_,res)=>res.sendFile(__dirname+'/public/aluno.html'));
 app.get('/qr.png',async(req,res)=>{try{res.type('png').send(await QRCode.toBuffer(String(req.query.url||''),{width:420,margin:2}))}catch(e){res.status(500).send('QR error')}});
 
@@ -20,6 +31,8 @@ function pubVote(){if(!vote)return null;return {voteId:vote.id,questionToken:vot
 function closeVote(){
  if(!vote||!vote.open)return; vote.open=false; clearTimeout(timer); clearInterval(voteTick);
  const results={}; for(const id of vote.eligible){const c=Object.prototype.hasOwnProperty.call(vote.responses,id)?vote.responses[id]:null;results[id]={choice:c,correct:c===vote.correctIndex,answered:c!==null}}
+ io.emit('vote:progress',{voteId:vote.id,questionToken:vote.questionToken,count:Object.keys(vote.responses).length,total:vote.eligible.length,voterIds:Object.keys(vote.responses),eligibleTeamIds:[...vote.eligible],choices:{...vote.responses},final:true});
+ trace('vote:close',{voteId:vote.id,questionToken:vote.questionToken,kind:vote.kind,responses:{...vote.responses},results});
  io.emit('vote:result',{voteId:vote.id,questionToken:vote.questionToken,kind:vote.kind,results,correctIndex:vote.correctIndex});
  io.emit('vote:closed',{voteId:vote.id,questionToken:vote.questionToken}); setTimeout(()=>vote=null,800);
 }
@@ -69,6 +82,7 @@ function rollCurrent(ack){
  emitGame();
 
  // Fase 1: animação do dado por 5 segundos.
+ trace('dice:rolling',{teamId:t.id,from,duration:5000});
  io.emit('game:diceRolling',{teamId:t.id,from,duration:5000});
  ack&&ack({ok:true,rolling:true});
 
@@ -78,6 +92,7 @@ function rollCurrent(ack){
    if(!live||!live.moving)return;
 
    // Fase 2: revela o resultado e informa quantas casas serão percorridas.
+   trace('dice:result',{teamId:live.id,value:n,from,target});
    io.emit('game:rolled',{teamId:live.id,value:n,from,target,displayMs:2200});
 
    // Fase 3: volta ao mapa e caminha casa por casa.
@@ -103,6 +118,7 @@ function rollCurrent(ack){
        step++;
        currentTeam.pos=Math.min(target,from+step);
        emitGame();
+       trace('move:step',{teamId:currentTeam.id,roll:n,step,totalSteps:actualSteps,pos:currentTeam.pos,from,target});
        io.emit('game:step',{teamId:currentTeam.id,roll:n,step,totalSteps:actualSteps,pos:currentTeam.pos,from,target});
        if(step<actualSteps){
          setTimeout(walk,900);
@@ -229,6 +245,10 @@ function applyGameEffect(d,ack){
 }
 
 io.on('connection',socket=>{
+ socket.emit('app:version',{version:APP_VERSION});
+ trace('socket:connect',{socketId:socket.id});
+ socket.emit('trace:snapshot',traceLog);
+ socket.on('trace:request',(_,ack)=>ack&&ack({ok:true,version:APP_VERSION,items:traceLog.slice(-300),game,vote:pubVote()}));
  socket.emit('game:state',game); if(vote&&vote.open)socket.emit('vote:open',pubVote());
  socket.on('professor:state',d=>{if(d&&Array.isArray(d.teams)){game=d;emitGame()}});
  socket.on('professor:reset',()=>resetGame());
@@ -265,8 +285,9 @@ io.on('connection',socket=>{
      responses:{},questionToken:String(d.questionToken||('Q'+now)),openedAt:now,duration,endsAt:now+duration*1000
    };
 
+   trace('vote:open',{voteId:vote.id,questionToken:vote.questionToken,kind:vote.kind,eligible:vote.eligible,duration:vote.duration});
    io.emit('vote:open',pubVote());
-   io.emit('vote:progress',{voteId:vote.id,questionToken:vote.questionToken,count:0,total:vote.eligible.length,voterIds:[]});
+   io.emit('vote:progress',{voteId:vote.id,questionToken:vote.questionToken,count:0,total:vote.eligible.length,voterIds:[],eligibleTeamIds:[...vote.eligible],choices:{}});
    io.emit('vote:tick',{voteId:vote.id,questionToken:vote.questionToken,remaining:duration});
 
    clearInterval(voteTick);
@@ -311,12 +332,14 @@ io.on('connection',socket=>{
    const c=+d.choice;
    if(!Number.isInteger(c)||c<0||c>=vote.optionCount)return ack&&ack({ok:false,message:'Alternativa inválida.'});
    vote.responses[id]=c;
+   trace('vote:accepted',{voteId:vote.id,questionToken:vote.questionToken,teamId:id,choice:c});
    const voterIds=Object.keys(vote.responses);
-   const progress={voteId:vote.id,questionToken:vote.questionToken,count:voterIds.length,total:vote.eligible.length,voterIds};
+   const progress={voteId:vote.id,questionToken:vote.questionToken,count:voterIds.length,total:vote.eligible.length,voterIds,eligibleTeamIds:[...vote.eligible],choices:{...vote.responses}};
    io.emit('vote:progress',progress);
    io.emit('vote:accepted',{voteId:vote.id,questionToken:vote.questionToken,teamId:id,count:voterIds.length,total:vote.eligible.length});
    ack&&ack({ok:true,voteId:vote.id,choice:c,count:voterIds.length,total:vote.eligible.length});
  });
+ socket.on('disconnect',reason=>trace('socket:disconnect',{socketId:socket.id,teamId:socket.data.teamId||null,reason}));
 });
 function ips(){let a=[];for(const xs of Object.values(os.networkInterfaces()))for(const x of xs||[])if(x.family==='IPv4'&&!x.internal)a.push(x.address);return a}
 server.listen(PORT,'0.0.0.0',()=>{console.log('\nPAC III — Game Jam: Corrida pelo Greenlight');console.log(`Professor: http://localhost:${PORT}/professor.html`);for(const ip of ips())console.log(`Alunos: http://${ip}:${PORT}/aluno`);console.log('')});
