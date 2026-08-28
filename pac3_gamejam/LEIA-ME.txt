@@ -21,3 +21,12 @@ CONTEÚDO
 Questões elaboradas a partir do cronograma do PAC III e do ebook de Game Design/GDD fornecidos pelo professor:
 Conceito e escopo; GDD/High Concept; MDA; core loop e mecânicas; narrativa; level design;
 prototipagem e playtest; UI/UX/HUD; direção de arte e som; testes, refinamento e pitch.
+
+VERSÃO 1.2 — CENTRAL DO GAME MASTER
+- A tela do professor é o controle principal da partida.
+- Professor pode rolar o dado sem depender do celular.
+- Professor confirma o movimento e avança o turno.
+- Professor pode selecionar o estúdio da vez manualmente.
+- Professor pode corrigir posição (+1/-1), XP (+1/-1) e remover Crunch.
+- Em bifurcações, a equipe pode decidir pelo celular ou o professor pode decidir pelo painel.
+- Os celulares continuam como controles complementares para dado, escolhas, Power-Ups e respostas.

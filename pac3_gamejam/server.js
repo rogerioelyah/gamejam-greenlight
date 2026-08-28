@@ -6,7 +6,7 @@ const QRCode=require('qrcode');
 const {Server}=require('socket.io');
 const app=express(), server=http.createServer(app), io=new Server(server);
 const PORT=process.env.PORT||3000;
-let game={teams:[],turnIndex:0,started:false,turnCount:1,phase:'CONCEITO'};
+let game={teams:[],turnIndex:0,started:false,turnCount:1,phase:'CONCEITO',sessionId:Date.now()};
 let vote=null,timer=null;
 
 app.use(express.static('public'));
@@ -26,9 +26,9 @@ function closeVote(){
 function resetGame(){
  clearTimeout(timer);
  vote=null;
- game={teams:[],turnIndex:0,started:false,turnCount:1,phase:'CONCEITO'};
+ game={teams:[],turnIndex:0,started:false,turnCount:1,phase:'CONCEITO',sessionId:Date.now()};
  io.emit('vote:closed',{});
- io.emit('game:reset');
+ io.emit('game:reset',{newGame:true,sessionId:game.sessionId});
  emitGame();
 }
 function nextTurn(){
@@ -37,10 +37,30 @@ function nextTurn(){
  do{game.turnIndex=(game.turnIndex+1)%game.teams.length;tries++}while(game.teams[game.turnIndex]?.eliminated&&tries<game.teams.length+1);
  game.turnCount++; emitGame();
 }
+
+function rollCurrent(ack){
+ const t=current();
+ if(!game.started||!t)return ack&&ack({ok:false,message:'A partida ainda não foi iniciada.'});
+ if(t.blocked)return ack&&ack({ok:false,message:'O estúdio está em Crunch. Consuma o bloqueio ou avance o turno.'});
+ if(t.pendingRoll)return ack&&ack({ok:false,message:'O dado já foi lançado.'});
+ const n=1+Math.floor(Math.random()*3);
+ t.pendingRoll=n; emitGame(); io.emit('game:rolled',{teamId:t.id,value:n});
+ ack&&ack({ok:true,value:n});
+}
+function chooseCurrentPath(choice,ack){
+ const t=current();
+ if(!t)return ack&&ack({ok:false,message:'Nenhum estúdio ativo.'});
+ if(!t.pendingPath)return ack&&ack({ok:false,message:'Não há bifurcação ativa.'});
+ if(!['risk','safe'].includes(choice))return ack&&ack({ok:false,message:'Rota inválida.'});
+ t.pendingPath=null;t.routeChoice=choice;emitGame();io.emit('game:pathChosen',{teamId:t.id,choice});ack&&ack({ok:true});
+}
 io.on('connection',socket=>{
  socket.emit('game:state',game); if(vote&&vote.open)socket.emit('vote:open',pubVote());
  socket.on('professor:state',d=>{if(d&&Array.isArray(d.teams)){game=d;emitGame()}});
  socket.on('professor:reset',()=>resetGame());
+ socket.on('professor:roll',(_,ack)=>rollCurrent(ack));
+ socket.on('professor:path',(d,ack)=>chooseCurrentPath(d?.choice,ack));
+ socket.on('professor:setTurn',(d,ack)=>{const i=game.teams.findIndex(t=>t.id===String(d?.teamId||''));if(i<0)return ack&&ack({ok:false,message:'Estúdio inválido.'});game.turnIndex=i;emitGame();ack&&ack({ok:true})});
  socket.on('professor:openVote',(d,ack)=>{
    if(vote&&vote.open)closeVote();
    vote={id:'V'+Date.now(),open:true,kind:d.kind||'collective',optionCount:+d.optionCount||4,correctIndex:+d.correctIndex,eligible:[...new Set(d.eligibleTeamIds||[])],responses:{}};
@@ -57,15 +77,11 @@ io.on('connection',socket=>{
  });
  socket.on('student:roll',(d,ack)=>{
    const t=current(),id=String(d?.teamId||''); if(!game.started||!t||t.id!==id)return ack&&ack({ok:false,message:'Não é o turno do seu estúdio.'});
-   if(t.blocked){return ack&&ack({ok:false,message:'Seu estúdio está em Crunch e perde este turno.'})}
-   if(t.pendingRoll)return ack&&ack({ok:false,message:'O dado já foi lançado.'});
-   const n=1+Math.floor(Math.random()*3); t.pendingRoll=n; emitGame(); io.emit('game:rolled',{teamId:id,value:n}); ack&&ack({ok:true,value:n});
+   rollCurrent(ack);
  });
  socket.on('student:path',(d,ack)=>{
    const t=current(),id=String(d?.teamId||''); if(!t||t.id!==id)return ack&&ack({ok:false,message:'Não é o seu turno.'});
-   if(!t.pendingPath)return ack&&ack({ok:false,message:'Não há bifurcação ativa.'});
-   const c=d?.choice; if(!['risk','safe'].includes(c))return ack&&ack({ok:false,message:'Rota inválida.'});
-   t.pendingPath=null;t.routeChoice=c;emitGame();io.emit('game:pathChosen',{teamId:id,choice:c});ack&&ack({ok:true});
+   chooseCurrentPath(d?.choice,ack);
  });
  socket.on('student:power',(d,ack)=>{
    const t=game.teams.find(x=>x.id===String(d?.teamId||'')); if(!t)return ack&&ack({ok:false});
