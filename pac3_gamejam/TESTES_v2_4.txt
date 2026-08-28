@@ -1,0 +1,41 @@
+PAC III — GAME JAM — TESTES v2.4
+
+Fluxo corrigido:
+1. Dado anima por 5s.
+2. Resultado do dado aparece por 1,7s.
+3. Pino anda uma casa por vez (~430ms).
+4. Casa final é resolvida.
+5. Se for pergunta, votação fica aberta por 20s completos.
+6. Respostas podem ser alteradas durante a votação.
+7. Só após 20s o resultado é publicado.
+
+RESULTADO: 28/28 testes PASS
+
+PASS — Sintaxe server.js
+PASS — Sintaxe questions.js
+PASS — Sintaxe JS professor
+PASS — Sintaxe JS aluno
+PASS — Dado D6 1–6
+PASS — Animação do dado dura 5s
+PASS — Resultado do dado só depois dos 5s
+PASS — Resultado fica 1,7s antes da caminhada
+PASS — Caminhada é casa a casa
+PASS — Casa só resolve após game:moved
+PASS — Pergunta abre votação de 20s
+PASS — Servidor fecha votação em exatamente duration*1000
+PASS — Responder cedo não fecha votação
+PASS — Aluno pode alterar voto
+PASS — Votação anterior é cancelada sem publicar resultado
+PASS — Resultado exige voteId da pergunta atual
+PASS — Crunch automático preservado
+PASS — Pódio preservado
+PASS — Pitch 3/5 preservado
+PASS — Kickoff setup(7) preservado
+PASS — Seleção 2–7 preservada
+PASS — Bifurcação fora do mapa
+PASS — Simulação temporal D6=1: dado→resultado→caminhada→20s — pergunta 7.38s, resposta >= 27.38s
+PASS — Simulação temporal D6=2: dado→resultado→caminhada→20s — pergunta 7.81s, resposta >= 27.81s
+PASS — Simulação temporal D6=3: dado→resultado→caminhada→20s — pergunta 8.24s, resposta >= 28.24s
+PASS — Simulação temporal D6=4: dado→resultado→caminhada→20s — pergunta 8.67s, resposta >= 28.67s
+PASS — Simulação temporal D6=5: dado→resultado→caminhada→20s — pergunta 9.10s, resposta >= 29.10s
+PASS — Simulação temporal D6=6: dado→resultado→caminhada→20s — pergunta 9.53s, resposta >= 29.53s

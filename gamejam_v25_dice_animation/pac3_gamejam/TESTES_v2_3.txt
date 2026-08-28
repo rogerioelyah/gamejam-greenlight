@@ -1,0 +1,33 @@
+PAC III — GAME JAM: CORRIDA PELO GREENLIGHT
+RELATÓRIO DE TESTES — v2.3
+
+Alteração:
+- Após rolar o dado, aparece uma tela grande com o resultado.
+- A tela permanece por ~1,7s.
+- Em seguida o mapa volta e o pino avança uma casa por vez (~430ms por casa).
+- A casa final só é resolvida depois que a caminhada termina.
+
+Resultado dos testes: 18/18 PASS
+
+PASS — Sintaxe server.js
+PASS — Sintaxe questions.js
+PASS — Sintaxe professor.html (JS inline)
+PASS — Sintaxe aluno.html (JS inline)
+PASS — Dado continua D6
+PASS — Tela do dado tem atraso de 1700ms
+PASS — Movimento é casa a casa
+PASS — Movimento final dispara resolução da casa
+PASS — Tela grande de resultado do dado existe
+PASS — Faces 1 a 6 do dado existem
+PASS — Crunch automático preservado
+PASS — 14 desafios preservados
+PASS — Bifurcações seguem fora do mapa
+PASS — Pódio preservado
+PASS — Pitch 3/5 preservado
+PASS — Kickoff preserva setup(7)
+PASS — Seleção 2–7 preservada
+PASS — Aluno mantém botão rolar
+
+Observação:
+Os testes incluem validação de sintaxe e regressão estática/fluxo do pacote.
+O teste com múltiplos celulares reais conectados ao Render continua sendo o teste final de integração.
