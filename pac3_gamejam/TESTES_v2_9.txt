@@ -1,0 +1,22 @@
+PAC III — GAME JAM — RELATÓRIO v2.9
+
+Correção principal: votos visíveis e sincronização da questão.
+- Todos os estúdios elegíveis aparecem na tela da pergunta como chips.
+- Quando um voto chega ao servidor, o chip daquele estúdio muda para ✓.
+- O professor também vê a lista nominal 'Votos recebidos'.
+- A alternativa escolhida NÃO é revelada no projetor antes da correção.
+- O celular mostra 'voto computado pelo servidor'.
+- O servidor envia um snapshot final dos votantes antes de publicar o resultado.
+- Resultado só é processado se o questionToken for da pergunta atual.
+- Desafio, Battle e Pitch usam a mesma mecânica de votantes.
+
+O que causava o problema:
+- A adaptação passou a filtrar eventos por IDs que só eram conhecidos após o ACK do Socket.IO.
+- Em conexão com latência, vote:tick / vote:progress / vote:result podiam chegar antes desse ACK e serem ignorados pela tela.
+- Agora o questionToken existe ANTES de abrir a votação e é usado para sincronizar todo o fluxo.
+
+TRACE:
+- Mantido em professor e aluno no ponto discreto inferior esquerdo.
+- Registra voto aceito, abertura/fechamento, timer, dado, movimento e erros.
+
+TESTES: 24/24 PASS

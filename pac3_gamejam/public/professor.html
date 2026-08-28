@@ -130,9 +130,9 @@ linear-gradient(#13365f 0 50%,#123a35 50% 57%,#142a1c 57% 100%);}
 }
 
 
-.traceFab{position:fixed;left:4px;bottom:4px;z-index:1200;width:18px;height:18px;border-radius:50%;border:0;background:#ffffff10;color:#ffffff30;font-size:9px;padding:0;cursor:pointer;opacity:.20}
+.traceFab{position:fixed!important;left:6px!important;bottom:6px!important;z-index:2147483646!important;width:30px!important;height:30px!important;border-radius:50%!important;border:0!important;background:transparent!important;color:#7dd3fc!important;font-size:14px!important;padding:0!important;cursor:pointer!important;opacity:.34!important;pointer-events:auto!important;display:grid!important;place-items:center!important}
 .traceFab:hover{opacity:.75}
-.tracePanel{position:fixed;left:8px;bottom:28px;z-index:1201;width:min(560px,92vw);max-height:70vh;background:#02070fef;border:1px solid #29436a;border-radius:12px;display:none;box-shadow:0 22px 70px #000c;overflow:hidden}
+.tracePanel{position:fixed!important;left:8px!important;bottom:42px!important;z-index:2147483647!important;width:min(620px,94vw)!important;max-height:76vh!important;background:#02070ff7!important;border:1px solid #29436a!important;border-radius:12px!important;display:none;box-shadow:0 22px 70px #000c!important;overflow:hidden!important;pointer-events:auto!important}
 .tracePanel.show{display:block}
 .traceHead{display:flex;justify-content:space-between;align-items:center;padding:9px 10px;border-bottom:1px solid #29436a;font-size:12px}
 .traceBody{padding:8px;max-height:55vh;overflow:auto;font-family:ui-monospace,SFMono-Regular,Menlo,monospace;font-size:10px;white-space:pre-wrap;word-break:break-word;color:#b9d7ff}
@@ -146,7 +146,7 @@ linear-gradient(#13365f 0 50%,#123a35 50% 57%,#142a1c 57% 100%);}
 .voterChip .voteLetter{display:inline-grid;place-items:center;min-width:22px;height:22px;margin-left:6px;border-radius:50%;background:#ffffff18;color:white}
 
 </style></head><body>
-<button id="traceFab" class="traceFab" title="">·</button>
+<button id="traceFab" class="traceFab" title="">⌁</button>
 <div id="tracePanel" class="tracePanel">
   <div class="traceHead"><b>TRACE</b><span id="traceStatus">live</span></div>
   <div id="traceBody" class="traceBody"></div>
@@ -157,7 +157,7 @@ linear-gradient(#13365f 0 50%,#123a35 50% 57%,#142a1c 57% 100%);}
     <button id="traceClose">Fechar</button>
   </div>
 </div>
-<header class="top"><div class="brand">🎮 PAC III — <span>GAME JAM: CORRIDA PELO GREENLIGHT</span><small id="appVersion" style="opacity:.35;margin-left:8px">v3.0.0-sync-diagnostic</small><small>Jogos Digitais Educacionais • Game Master</small></div><div class="row"><button class="btn" id="qrBtn">📱 QR</button><button class="btn" id="undo">↩ Desfazer</button><button class="btn" id="reset">↻ Reiniciar</button></div></header>
+<header class="top"><div class="brand">🎮 PAC III — <span>GAME JAM: CORRIDA PELO GREENLIGHT</span><small id="appVersion" style="opacity:.35;margin-left:8px">v3.1.0-trace-always-on-top</small><small>Jogos Digitais Educacionais • Game Master</small></div><div class="row"><button class="btn" id="qrBtn">📱 QR</button><button class="btn" id="undo">↩ Desfazer</button><button class="btn" id="reset">↻ Reiniciar</button></div></header>
 <section id="setup" class="setup"><div class="card"><div class="ey">Kickoff da Game Jam</div><h1>7 estúdios. 4 mundos. 1 Greenlight.</h1><p>Cada equipe controla um estúdio pelo celular. O dado define a oportunidade; conhecimento, desafios e Power-Ups definem a estratégia. Configure os estúdios presentes.</p><div class="row"><b>Estúdios:</b><select id="count" class="btn"></select><button class="btn" id="apply">APLICAR</button></div><div id="names" class="names"></div><button class="btn primary" id="start">🚀 INICIAR GAME JAM</button></div></section>
 <section id="game" class="game hidden">
 <aside class="panel sticky"><div class="turnbox"><div class="ey">🎛️ Central do Game Master</div><b id="now">—</b><div id="phase" class="note"></div><div class="die" id="die">🎲</div><button class="btn primary" style="width:100%" id="profRoll">🎲 ROLAR DADO</button><button class="btn good" style="width:100%;margin-top:7px" id="move">🛟 RESOLVER CASA ATUAL</button><button class="btn" style="width:100%;margin-top:7px" id="skip">➡ PRÓXIMO ESTÚDIO</button><div class="note" style="margin-top:8px">O celular pode solicitar ações, mas a tela do professor mantém o controle total da partida.</div><hr style="border:0;border-top:1px solid #29436a;margin:12px 0"><div class="ey">Controle manual</div><select id="gmTeam" class="btn" style="width:100%;margin-top:7px"></select><div class="row" style="margin-top:7px"><button class="btn" id="back1">◀ -1 casa</button><button class="btn" id="plus1">+1 casa ▶</button></div><div class="row" style="margin-top:7px"><button class="btn" id="xpMinus">⭐ -1 XP</button><button class="btn" id="xpPlus">⭐ +1 XP</button></div><div class="row" style="margin-top:7px"><button class="btn warn" style="flex:1" id="consumeCrunch">😵 CONSUMIR CRUNCH</button><button class="btn" style="flex:1" id="unblock">🔓 REMOVER CRUNCH</button></div></div><table class="score"><tbody id="score"></tbody></table></aside>
@@ -189,7 +189,7 @@ linear-gradient(#13365f 0 50%,#123a35 50% 57%,#142a1c 57% 100%);}
 <div id="modal"></div><div id="toast" class="toast hidden"></div>
 <script src="/socket.io/socket.io.js"></script><script src="/questions.js"></script><script>
 const socket=io(),$=id=>document.getElementById(id),LET=['A','B','C','D'];
-const CLIENT_VERSION='3.0.0-sync-diagnostic';
+const CLIENT_VERSION='3.1.0-trace-always-on-top';
 let SERVER_VERSION=null;
 let S={teams:[],turnIndex:0,started:false,turnCount:1,phase:'CONCEITO'},history=[],activeQ=null,lastVote=null,turbo=false,pitch={};
 let movingTeamId=null,currentVoteId=null,currentVoteToken=null;
@@ -646,6 +646,19 @@ socket.on('trace:event',x=>{localTrace.push(x);if(localTrace.length>300)localTra
 socket.on('trace:snapshot',items=>{if(Array.isArray(items)){localTrace=items.slice(-300);renderTrace()}});
 window.addEventListener('error',e=>addTrace('window:error',{message:e.message,source:e.filename,line:e.lineno,col:e.colno,stack:e.error?.stack||null}));
 window.addEventListener('unhandledrejection',e=>addTrace('promise:rejection',{reason:String(e.reason),stack:e.reason?.stack||null}));
+(function ensureTraceAlwaysOnTop(){
+ const fab=$('traceFab'),panel=$('tracePanel');
+ if(fab)document.body.appendChild(fab);
+ if(panel)document.body.appendChild(panel);
+ addTrace('trace:ui-ready',{screen:location.pathname,zFab:getComputedStyle(fab).zIndex,zPanel:getComputedStyle(panel).zIndex});
+ document.addEventListener('keydown',e=>{
+   if(e.ctrlKey&&e.altKey&&String(e.key).toLowerCase()==='t'){
+     $('tracePanel').classList.toggle('show');
+     if($('tracePanel').classList.contains('show'))requestTrace();
+   }
+ });
+})();
+
 
 
 socket.on('app:version',d=>{

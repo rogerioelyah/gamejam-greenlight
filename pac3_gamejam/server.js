@@ -6,7 +6,7 @@ const QRCode=require('qrcode');
 const {Server}=require('socket.io');
 const app=express(), server=http.createServer(app), io=new Server(server);
 const PORT=process.env.PORT||3000;
-const APP_VERSION='3.0.0-sync-diagnostic';
+const APP_VERSION='3.1.0-trace-always-on-top';
 let game={teams:[],turnIndex:0,started:false,turnCount:1,phase:'CONCEITO',sessionId:Date.now()};
 let traceLog=[];
 function trace(type,data={}){

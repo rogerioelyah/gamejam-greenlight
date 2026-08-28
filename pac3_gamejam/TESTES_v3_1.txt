@@ -1,0 +1,18 @@
+PAC III — GAME JAM — v3.1.0-trace-always-on-top
+
+Correção: Trace realmente disponível em TODAS as telas.
+
+PASS — trace z-index max professor
+PASS — trace z-index max aluno
+PASS — trace reappend body professor
+PASS — trace reappend body aluno
+PASS — atalho Ctrl+Alt+T professor
+PASS — atalho Ctrl+Alt+T aluno
+PASS — versão servidor
+PASS — versão professor
+PASS — versão aluno
+
+Acesso:
+- ícone discreto ⌁ no canto inferior esquerdo
+- atalho de emergência: Ctrl+Alt+T
+- painel usa z-index máximo e é reanexado ao body para ficar acima de perguntas, respostas, pódio e demais overlays.
