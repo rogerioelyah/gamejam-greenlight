@@ -62,3 +62,10 @@ v2.1 — FLUXO AUTOMÁTICO / TELA INICIAL PRESERVADA
 - Crunch é consumido automaticamente ao chegar o turno da equipe.
 - Tela grande de desbloqueio usa o mesmo sistema de modal já existente, sem criar overlays que interfiram na configuração inicial.
 - 'Resolver casa atual' permanece apenas como recuperação do Game Master.
+
+v2.2 — CORREÇÃO DO KICKOFF + REGRESSÃO
+- Corrigida falha de sintaxe que impedia os campos dos estúdios de aparecerem.
+- Tela inicial voltou a exibir Estúdio 1 a Estúdio 7.
+- Texto do Kickoff atualizado: sem referência a rotas/bifurcações.
+- Resíduos da antiga bifurcação removidos do controle do aluno.
+- Pacote validado por testes de sintaxe, smoke test de UI e verificações de regressão.
