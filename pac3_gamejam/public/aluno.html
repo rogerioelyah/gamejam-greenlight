@@ -11,7 +11,7 @@
 .traceActions{display:flex;gap:6px;padding:8px;border-top:1px solid #29436a}
 .traceActions button{font-size:10px;padding:6px 8px}
 
-</style></head><body><div id="appVersion" style="position:fixed;right:4px;bottom:3px;opacity:.18;font-size:8px;z-index:999">v3.1.0-trace-always-on-top</div>
+</style></head><body><div id="appVersion" style="position:fixed;right:4px;bottom:3px;opacity:.18;font-size:8px;z-index:999">v3.2.0-vote-recovery</div>
 <button id="traceFab" class="traceFab" title="">⌁</button>
 <div id="tracePanel" class="tracePanel">
   <div class="traceHead"><b>TRACE</b><span id="traceStatus">live</span></div>
@@ -29,7 +29,7 @@
 <div class="card"><div class="muted">Meu estúdio</div><div class="metrics"><div class="metric">XP<b id="pts">—</b></div><div class="metric">Casa<b id="pos">—</b></div><div class="metric">Mundo<b id="world">—</b></div></div><div class="powers" style="margin-top:10px"><button class="power" data-power="insight">💡 Insight <span id="pi">0</span></button><button class="power" data-power="hotfix">🔧 Hotfix <span id="ph">0</span></button><button class="power" data-power="pivot">🔄 Pivot <span id="pp">0</span></button></div><div id="myStatus" class="status"></div></div>
 </main><script src="/socket.io/socket.io.js"></script><script>
 const socket=io(),$=id=>document.getElementById(id)
-const CLIENT_VERSION='3.1.0-trace-always-on-top';
+const CLIENT_VERSION='3.2.0-vote-recovery';
 let SERVER_VERSION=null;let my=localStorage.getItem('pac3StudioId')||null,g=null,vote=null,choice=null;
 function answers(n=4){$('answers').innerHTML=['A','B','C','D'].slice(0,n).map((x,i)=>`<button class="ans" data-i="${i}" disabled>${x}</button>`).join('');document.querySelectorAll('.ans').forEach(b=>b.onclick=()=>cast(+b.dataset.i))}
 answers();
@@ -116,6 +116,17 @@ socket.on('app:version',d=>{
    console.error(msg);
    addTrace('version:mismatch',{client:CLIENT_VERSION,server:SERVER_VERSION});
    $('turnMsg').textContent='⚠️ '+msg;
+ }
+});
+
+
+socket.on('vote:sync',p=>{
+ const x=p?.vote;
+ if(x?.open){
+   vote=x;
+   choice=x.currentChoices&&Object.prototype.hasOwnProperty.call(x.currentChoices,my)?+x.currentChoices[my]:null;
+   answers(x.optionCount||4);applyVote();
+   $('voteMsg').textContent=choice!==null?'✅ Seu voto continua registrado no servidor.':'Votação ativa. Envie sua resposta.';
  }
 });
 

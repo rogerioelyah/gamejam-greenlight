@@ -6,7 +6,7 @@ const QRCode=require('qrcode');
 const {Server}=require('socket.io');
 const app=express(), server=http.createServer(app), io=new Server(server);
 const PORT=process.env.PORT||3000;
-const APP_VERSION='3.1.0-trace-always-on-top';
+const APP_VERSION='3.2.0-vote-recovery';
 let game={teams:[],turnIndex:0,started:false,turnCount:1,phase:'CONCEITO',sessionId:Date.now()};
 let traceLog=[];
 function trace(type,data={}){
@@ -16,29 +16,32 @@ function trace(type,data={}){
   io.emit('trace:event',item);
 }
 
-let vote=null,timer=null,voteTick=null;
+let vote=null,timer=null,voteTick=null,lastVoteResult=null;
 
 app.use((req,res,next)=>{res.set('Cache-Control','no-store, no-cache, must-revalidate, proxy-revalidate');res.set('Pragma','no-cache');res.set('Expires','0');next()});
 app.use(express.static('public'));
 app.get('/',(_,res)=>res.redirect('/professor.html'));
-app.get('/healthz',(_,res)=>res.json({ok:true,version:APP_VERSION,started:game.started,teams:game.teams.length,vote:pubVote()}));
+app.get('/healthz',(_,res)=>res.json({ok:true,version:APP_VERSION,started:game.started,teams:game.teams.length,vote:pubVote(),lastVoteResult}));
 app.get('/aluno',(_,res)=>res.sendFile(__dirname+'/public/aluno.html'));
 app.get('/qr.png',async(req,res)=>{try{res.type('png').send(await QRCode.toBuffer(String(req.query.url||''),{width:420,margin:2}))}catch(e){res.status(500).send('QR error')}});
 
 function current(){return game.teams[game.turnIndex]||null}
 function emitGame(){io.emit('game:state',game)}
-function pubVote(){if(!vote)return null;return {voteId:vote.id,questionToken:vote.questionToken,open:vote.open,kind:vote.kind,optionCount:vote.optionCount,eligibleTeamIds:vote.eligible,currentChoices:{...vote.responses},endsAt:vote.endsAt,duration:vote.duration}}
+function pubVote(){if(!vote)return null;return {voteId:vote.id,questionToken:vote.questionToken,open:vote.open,kind:vote.kind,optionCount:vote.optionCount,eligibleTeamIds:vote.eligible,currentChoices:{...vote.responses},endsAt:vote.endsAt,duration:vote.duration,meta:vote.meta||null}}
 function closeVote(){
  if(!vote||!vote.open)return; vote.open=false; clearTimeout(timer); clearInterval(voteTick);
  const results={}; for(const id of vote.eligible){const c=Object.prototype.hasOwnProperty.call(vote.responses,id)?vote.responses[id]:null;results[id]={choice:c,correct:c===vote.correctIndex,answered:c!==null}}
  io.emit('vote:progress',{voteId:vote.id,questionToken:vote.questionToken,count:Object.keys(vote.responses).length,total:vote.eligible.length,voterIds:Object.keys(vote.responses),eligibleTeamIds:[...vote.eligible],choices:{...vote.responses},final:true});
+ const resultPayload={voteId:vote.id,questionToken:vote.questionToken,kind:vote.kind,results,correctIndex:vote.correctIndex,meta:vote.meta||null,closedAt:Date.now()};
+ lastVoteResult=resultPayload;
  trace('vote:close',{voteId:vote.id,questionToken:vote.questionToken,kind:vote.kind,responses:{...vote.responses},results});
- io.emit('vote:result',{voteId:vote.id,questionToken:vote.questionToken,kind:vote.kind,results,correctIndex:vote.correctIndex});
- io.emit('vote:closed',{voteId:vote.id,questionToken:vote.questionToken}); setTimeout(()=>vote=null,800);
+ io.emit('vote:result',resultPayload);
+ io.emit('vote:closed',{voteId:vote.id,questionToken:vote.questionToken});
+ setTimeout(()=>vote=null,800);
 }
 function resetGame(){
  clearTimeout(timer); clearInterval(voteTick);
- vote=null;
+ vote=null;lastVoteResult=null;
  game={teams:[],turnIndex:0,started:false,turnCount:1,phase:'CONCEITO',sessionId:Date.now()};
  io.emit('vote:closed',{});
  io.emit('game:reset',{newGame:true,sessionId:game.sessionId});
@@ -248,8 +251,9 @@ io.on('connection',socket=>{
  socket.emit('app:version',{version:APP_VERSION});
  trace('socket:connect',{socketId:socket.id});
  socket.emit('trace:snapshot',traceLog);
- socket.on('trace:request',(_,ack)=>ack&&ack({ok:true,version:APP_VERSION,items:traceLog.slice(-300),game,vote:pubVote()}));
- socket.emit('game:state',game); if(vote&&vote.open)socket.emit('vote:open',pubVote());
+ socket.on('trace:request',(_,ack)=>ack&&ack({ok:true,version:APP_VERSION,items:traceLog.slice(-300),game,vote:pubVote(),lastVoteResult}));
+ socket.emit('game:state',game);
+ socket.emit('vote:sync',{vote:pubVote(),lastVoteResult}); if(vote&&vote.open)socket.emit('vote:open',pubVote());
  socket.on('professor:state',d=>{if(d&&Array.isArray(d.teams)){game=d;emitGame()}});
  socket.on('professor:reset',()=>resetGame());
  socket.on('professor:roll',(_,ack)=>rollCurrent(ack));
@@ -282,7 +286,7 @@ io.on('connection',socket=>{
      id:'V'+now,open:true,kind:d.kind||'collective',
      optionCount:+d.optionCount||4,correctIndex:+d.correctIndex,
      eligible:[...new Set(d.eligibleTeamIds||[])],
-     responses:{},questionToken:String(d.questionToken||('Q'+now)),openedAt:now,duration,endsAt:now+duration*1000
+     responses:{},questionToken:String(d.questionToken||('Q'+now)),meta:d.meta||null,openedAt:now,duration,endsAt:now+duration*1000
    };
 
    trace('vote:open',{voteId:vote.id,questionToken:vote.questionToken,kind:vote.kind,eligible:vote.eligible,duration:vote.duration});
@@ -302,7 +306,8 @@ io.on('connection',socket=>{
    ack&&ack({ok:true,voteId:vote.id,questionToken:vote.questionToken,duration,endsAt:vote.endsAt});
  });
  socket.on('professor:applyEffect',(d,ack)=>applyGameEffect(d,ack));
- socket.on('professor:closeVote',()=>closeVote());
+ socket.on('professor:voteSync',(_,ack)=>ack&&ack({ok:true,vote:pubVote(),lastVoteResult}));
+  socket.on('professor:closeVote',()=>closeVote());
  socket.on('professor:nextTurn',()=>nextTurn());
  socket.on('student:hello',d=>{socket.data.teamId=d?.teamId||null;socket.emit('game:state',game);if(vote&&vote.open)socket.emit('vote:open',pubVote())});
  socket.on('student:join',(d,ack)=>{

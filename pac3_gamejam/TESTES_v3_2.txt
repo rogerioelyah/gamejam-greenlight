@@ -1,0 +1,17 @@
+PAC III — GAME JAM — v3.2.0-vote-recovery
+
+Diagnóstico confirmado pelo /healthz:
+- Durante a tela travada, o servidor retornou vote:null.
+- Isso prova que a votação já havia sido encerrada/limpa no servidor, enquanto a tela do professor continuava presa na pergunta.
+- Portanto o problema principal era perda/ignorância do evento de resultado no cliente, não a animação do dado.
+
+Correções:
+- Servidor preserva lastVoteResult após encerrar a votação.
+- /healthz passa a expor lastVoteResult.
+- Pergunta envia metadados ao servidor, permitindo reconstruir a correção.
+- Professor solicita voteSync ao reconectar e também automaticamente 700ms após chegar a 0s.
+- Se vote:result for perdido, a tela recupera lastVoteResult e continua para resposta/pódio.
+- Processamento é idempotente para impedir pontuação duplicada.
+- Aluno também recupera votação ativa ao reconectar.
+
+TESTES: 21/21 PASS
