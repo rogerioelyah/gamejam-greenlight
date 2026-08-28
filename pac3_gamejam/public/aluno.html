@@ -1,133 +1,17 @@
-<!doctype html><html lang="pt-BR"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1,maximum-scale=1"><title>PAC III — Controle do Estúdio</title><style>
-:root{--bg:#071326;--p:#0d1e36;--b:#29496d;--t:#f6fbff;--m:#9fb5d4;--c:#32d5ff;--g:#4ade80;--y:#ffd166}
-*{box-sizing:border-box}body{margin:0;background:radial-gradient(circle at top,#16365d,#071326 50%);color:var(--t);font-family:Inter,system-ui,sans-serif;min-height:100vh}main{max-width:620px;margin:auto;padding:14px}.card{background:#0a192e;border:1px solid var(--b);border-radius:19px;padding:17px;margin-bottom:11px}h1{font-size:24px;margin:4px 0 12px}.muted{color:var(--m);font-size:12px}select,button{font:inherit}select{width:100%;padding:14px;border-radius:12px;background:#112943;color:white;border:1px solid var(--b)}button{border:0;border-radius:15px;color:white;font-weight:1000}.join{width:100%;padding:14px;margin-top:9px;background:#087ea4}.turn{padding:18px;width:100%;background:#176b3a;font-size:19px}.turn:disabled{opacity:.35}.answers{display:grid;grid-template-columns:1fr 1fr;gap:9px}.ans{height:95px;font-size:38px;background:#173a58;border:2px solid #315b7f}.ans.sel{outline:4px solid var(--y);background:#4a4618}.ans:disabled{opacity:.3}.metrics{display:grid;grid-template-columns:repeat(3,1fr);gap:7px}.metric{text-align:center;background:#10243c;border:1px solid var(--b);padding:9px;border-radius:11px}.metric b{display:block;font-size:23px}.powers{display:flex;gap:7px;flex-wrap:wrap}.power{padding:10px;background:#4d3572}.path{display:grid;grid-template-columns:1fr 1fr;gap:8px}.path button{padding:16px;background:#31506e}.status{font-weight:900;margin-top:8px}.ok{color:#86efac}.wait{color:#fde68a}
-
-.traceFab{position:fixed!important;left:6px!important;bottom:6px!important;z-index:2147483646!important;width:30px!important;height:30px!important;border-radius:50%!important;border:0!important;background:transparent!important;color:#7dd3fc!important;font-size:14px!important;padding:0!important;cursor:pointer!important;opacity:.34!important;pointer-events:auto!important;display:grid!important;place-items:center!important}
-.traceFab:hover{opacity:.75}
-.tracePanel{position:fixed!important;left:8px!important;bottom:42px!important;z-index:2147483647!important;width:min(620px,94vw)!important;max-height:76vh!important;background:#02070ff7!important;border:1px solid #29436a!important;border-radius:12px!important;display:none;box-shadow:0 22px 70px #000c!important;overflow:hidden!important;pointer-events:auto!important}
-.tracePanel.show{display:block}
-.traceHead{display:flex;justify-content:space-between;align-items:center;padding:9px 10px;border-bottom:1px solid #29436a;font-size:12px}
-.traceBody{padding:8px;max-height:55vh;overflow:auto;font-family:ui-monospace,SFMono-Regular,Menlo,monospace;font-size:10px;white-space:pre-wrap;word-break:break-word;color:#b9d7ff}
-.traceActions{display:flex;gap:6px;padding:8px;border-top:1px solid #29436a}
-.traceActions button{font-size:10px;padding:6px 8px}
-
-</style></head><body><div id="appVersion" style="position:fixed;right:4px;bottom:3px;opacity:.18;font-size:8px;z-index:999">v3.2.0-vote-recovery</div>
-<button id="traceFab" class="traceFab" title="">⌁</button>
-<div id="tracePanel" class="tracePanel">
-  <div class="traceHead"><b>TRACE</b><span id="traceStatus">live</span></div>
-  <div id="traceBody" class="traceBody"></div>
-  <div class="traceActions">
-    <button id="traceRefresh">Atualizar</button>
-    <button id="traceCopy">Copiar</button>
-    <button id="traceClear">Limpar local</button>
-    <button id="traceClose">Fechar</button>
-  </div>
-</div><main>
-<div class="card"><div class="muted">PAC III • Game Jam</div><h1>🎮 Controle do Estúdio</h1><div id="join"><select id="sel"></select><button class="join" id="joinBtn">ENTRAR COMO ESTÚDIO</button></div><div id="locked" class="status ok" style="display:none"></div></div>
-<div class="card"><div class="muted">Meu turno</div><h1 id="turnTitle">Aguardando...</h1><button class="turn" id="roll" disabled>🎲 ROLAR DADO</button><div id="turnMsg" class="status wait">Aguarde seu turno.</div></div>
-<div class="card"><div class="muted">Playtest / Questão</div><h1 id="voteTitle">Aguardando questão</h1><div class="answers" id="answers"></div><div id="voteMsg" class="status wait">Os botões serão liberados quando seu estúdio puder responder.</div></div>
-<div class="card"><div class="muted">Meu estúdio</div><div class="metrics"><div class="metric">XP<b id="pts">—</b></div><div class="metric">Casa<b id="pos">—</b></div><div class="metric">Mundo<b id="world">—</b></div></div><div class="powers" style="margin-top:10px"><button class="power" data-power="insight">💡 Insight <span id="pi">0</span></button><button class="power" data-power="hotfix">🔧 Hotfix <span id="ph">0</span></button><button class="power" data-power="pivot">🔄 Pivot <span id="pp">0</span></button></div><div id="myStatus" class="status"></div></div>
-</main><script src="/socket.io/socket.io.js"></script><script>
-const socket=io(),$=id=>document.getElementById(id)
-const CLIENT_VERSION='3.2.0-vote-recovery';
-let SERVER_VERSION=null;let my=localStorage.getItem('pac3StudioId')||null,g=null,vote=null,choice=null;
-function answers(n=4){$('answers').innerHTML=['A','B','C','D'].slice(0,n).map((x,i)=>`<button class="ans" data-i="${i}" disabled>${x}</button>`).join('');document.querySelectorAll('.ans').forEach(b=>b.onclick=()=>cast(+b.dataset.i))}
-answers();
-function me(){return g?.teams?.find(t=>t.id===my)}function phase(p){return p<=6?'1':p<=12?'2':p<=18?'3':'4'}
-function render(){if(!g)return;$('sel').innerHTML=g.teams.map(t=>`<option value="${t.id}">${t.name}</option>`).join('');let t=me(),cur=g.teams[g.turnIndex];if(t){$('join').style.display='none';$('locked').style.display='block';$('locked').textContent='🔒 '+t.name;$('pts').textContent=t.points;$('pos').textContent=t.pos;$('world').textContent=phase(t.pos);$('pi').textContent=t.inventory?.insight||0;$('ph').textContent=t.inventory?.hotfix||0;$('pp').textContent=t.inventory?.pivot||0;$('myStatus').textContent=t.blocked?'😵 CRUNCH — perderá o próximo turno':'🟢 Em produção';let mine=cur?.id===my;$('turnTitle').textContent=mine?'🚀 É O SEU TURNO':`⏳ ${cur?.name||'Outro estúdio'} está jogando`;$('roll').disabled=!mine||!!t.pendingRoll||!!t.blocked;$('turnMsg').textContent=t.blocked&&mine?'Seu estúdio está em Crunch. A penalidade será consumida automaticamente neste turno.':t.pendingRoll?`🎲 Dado: ${t.pendingRoll}. Aguarde o movimento.`:mine?'Role o dado. O movimento será executado automaticamente.':'Acompanhe o mapa no projetor.'}applyVote()}
-function applyVote(){let t=me(),eligible=vote?.eligibleTeamIds?.includes(my),open=vote?.open&&eligible&&!t?.blocked;document.querySelectorAll('.ans').forEach(b=>{b.disabled=!open;b.classList.toggle('sel',choice!==null&&+b.dataset.i===choice)});if(vote?.open){$('voteTitle').textContent=eligible?'Escolha sua decisão':'Acompanhe o desafio';$('voteMsg').textContent=eligible?(choice!==null?'✅ Registrada. Pode alterar até o tempo acabar.':'Converse com seu estúdio e responda. Você pode mudar seu voto enquanto o cronômetro estiver aberto.'):'Seu estúdio não participa desta votação.'}else{$('voteTitle').textContent='Aguardando questão';$('voteMsg').textContent='Os botões serão liberados quando seu estúdio puder responder.'}}
-$('joinBtn').onclick=()=>{my=$('sel').value;localStorage.setItem('pac3StudioId',my);socket.emit('student:join',{teamId:my},a=>{if(!a?.ok)alert(a?.message||'Erro');render()})};
-$('roll').onclick=()=>socket.emit('student:roll',{teamId:my},a=>{if(!a?.ok)$('turnMsg').textContent=a?.message||'Não foi possível rolar.'});
-document.querySelectorAll('.power').forEach(b=>b.onclick=()=>socket.emit('student:power',{teamId:my,power:b.dataset.power},a=>{$('myStatus').textContent=a?.message||'Solicitação enviada.'}));
-function cast(i){
- if(!vote?.open)return;
- let old=choice;
- choice=i;
- applyVote();
- $('voteMsg').textContent='Enviando voto...';
- socket.emit('student:vote',{voteId:vote.voteId,teamId:my,choice:i},a=>{
-   if(!a?.ok){
-     choice=old;applyVote();
-     $('voteMsg').textContent=a?.message||'Erro ao registrar voto.';
-     return;
-   }
-   $('voteMsg').textContent=`✅ Voto ${['A','B','C','D'][i]} computado pelo servidor (${a.count}/${a.total}). Você ainda pode alterar.`;
- });
-}
-socket.on('connect',()=>socket.emit('student:hello',{teamId:my}));
-socket.on('game:reset',()=>{localStorage.removeItem('pac3StudioId');my=null;vote=null;choice=null;$('join').style.display='block';$('locked').style.display='none';$('turnTitle').textContent='Aguardando nova partida...';$('turnMsg').textContent='O Game Master reiniciou a Game Jam.';answers();applyVote()});
-socket.on('game:state',x=>{g=x;render()});socket.on('game:diceRolling',d=>{if(d.teamId===my)$('turnMsg').textContent='🎲 Dado girando... aguarde o resultado.';});socket.on('game:rolled',d=>{if(d.teamId===my)$('turnMsg').textContent=`🎲 Resultado: ${d.value}. Acompanhe o pino andando no projetor.`;});socket.on('game:step',d=>{if(d.teamId===my)$('turnMsg').textContent=`🚶 Movendo: ${d.step}/${d.totalSteps} • Casa ${d.pos}`;});socket.on('game:crunchReleased',d=>{if(d.teamId===my){$('turnMsg').textContent='🔓 Crunch consumido. Você perdeu este turno e está desbloqueado.';$('myStatus').textContent='🟢 Desbloqueado';}});socket.on('vote:open',x=>{vote=x;choice=x.currentChoices&&Object.prototype.hasOwnProperty.call(x.currentChoices,my)?+x.currentChoices[my]:null;answers(x.optionCount||4);applyVote()});socket.on('vote:accepted',d=>{if(d.teamId===my&&vote?.voteId===d.voteId)$('voteMsg').textContent=`✅ Voto recebido pelo servidor (${d.count}/${d.total}). Você pode alterar enquanto o tempo estiver aberto.`;});socket.on('vote:closed',()=>{vote=null;choice=null;applyVote()});
-let localTrace=[];
-function addTrace(type,data={}){
- const item={ts:new Date().toISOString(),type,data};
- localTrace.push(item);
- if(localTrace.length>300)localTrace=localTrace.slice(-300);
- renderTrace();
-}
-function renderTrace(){
- const el=$('traceBody');if(!el)return;
- el.textContent=localTrace.map(x=>`[${x.ts}] ${x.type}\n${JSON.stringify(x.data,null,2)}`).join('\n\n');
- el.scrollTop=el.scrollHeight;
-}
-function requestTrace(){
- socket.emit('trace:request',{},r=>{
-   if(!r?.ok)return addTrace('trace:error',r||{});
-   localTrace=[...(r.items||[])];
-   localTrace.push({ts:new Date().toISOString(),type:'trace:snapshot',data:{game:r.game,vote:r.vote}});
-   renderTrace();
- });
-}
-$('traceFab').onclick=()=>{$('tracePanel').classList.toggle('show');if($('tracePanel').classList.contains('show'))requestTrace()};
-$('traceRefresh').onclick=()=>requestTrace();
-$('traceClose').onclick=()=>$('tracePanel').classList.remove('show');
-$('traceClear').onclick=()=>{localTrace=[];renderTrace()};
-$('traceCopy').onclick=async()=>{
- requestTrace();
- setTimeout(async()=>{
-   const txt=$('traceBody').textContent;
-   try{await navigator.clipboard.writeText(txt);$('traceStatus').textContent='copiado'}catch(e){$('traceStatus').textContent='copie manualmente'}
-   setTimeout(()=>$('traceStatus').textContent='live',1400);
- },120);
-};
-socket.on('trace:event',x=>{localTrace.push(x);if(localTrace.length>300)localTrace=localTrace.slice(-300);renderTrace()});
-socket.on('trace:snapshot',items=>{if(Array.isArray(items)){localTrace=items.slice(-300);renderTrace()}});
-window.addEventListener('error',e=>addTrace('window:error',{message:e.message,source:e.filename,line:e.lineno,col:e.colno,stack:e.error?.stack||null}));
-window.addEventListener('unhandledrejection',e=>addTrace('promise:rejection',{reason:String(e.reason),stack:e.reason?.stack||null}));
-(function ensureTraceAlwaysOnTop(){
- const fab=$('traceFab'),panel=$('tracePanel');
- if(fab)document.body.appendChild(fab);
- if(panel)document.body.appendChild(panel);
- addTrace('trace:ui-ready',{screen:location.pathname,zFab:getComputedStyle(fab).zIndex,zPanel:getComputedStyle(panel).zIndex});
- document.addEventListener('keydown',e=>{
-   if(e.ctrlKey&&e.altKey&&String(e.key).toLowerCase()==='t'){
-     $('tracePanel').classList.toggle('show');
-     if($('tracePanel').classList.contains('show'))requestTrace();
-   }
- });
-})();
-
-
-
-socket.on('app:version',d=>{
- SERVER_VERSION=d?.version||'desconhecida';
- addTrace('app:version',{client:CLIENT_VERSION,server:SERVER_VERSION});
- if(SERVER_VERSION!==CLIENT_VERSION){
-   const msg=`VERSÃO INCOMPATÍVEL: tela ${CLIENT_VERSION} × servidor ${SERVER_VERSION}. Recarregue a página após confirmar o deploy no Render.`;
-   console.error(msg);
-   addTrace('version:mismatch',{client:CLIENT_VERSION,server:SERVER_VERSION});
-   $('turnMsg').textContent='⚠️ '+msg;
- }
-});
-
-
-socket.on('vote:sync',p=>{
- const x=p?.vote;
- if(x?.open){
-   vote=x;
-   choice=x.currentChoices&&Object.prototype.hasOwnProperty.call(x.currentChoices,my)?+x.currentChoices[my]:null;
-   answers(x.optionCount||4);applyVote();
-   $('voteMsg').textContent=choice!==null?'✅ Seu voto continua registrado no servidor.':'Votação ativa. Envie sua resposta.';
- }
-});
-
+<!doctype html><html lang="pt-BR"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1,user-scalable=no"><title>Game Jam — Controle</title><script src="/socket.io/socket.io.js"></script>
+<style>*{box-sizing:border-box}body{margin:0;background:#06101d;color:#eef7ff;font:16px system-ui;min-height:100vh;display:grid;place-items:center;padding:16px}.card{width:min(520px,100%);background:#0d1d31;border:1px solid #29435f;border-radius:24px;padding:22px;text-align:center}.ey{color:#7dd3fc;font-size:11px;font-weight:1000;letter-spacing:.12em}.name{font-size:28px;font-weight:1000;margin:8px}.msg{color:#9db5cc;margin:10px}.answers{display:grid;grid-template-columns:1fr 1fr;gap:12px;margin-top:18px}.ans{height:110px;border:1px solid #355774;border-radius:18px;background:#10263a;color:white;font-size:34px;font-weight:1000}.ans.sel{background:#075985;outline:4px solid #38bdf8}.ans:disabled{opacity:.35}.ok{padding:12px;border-radius:12px;background:#14532d;color:#bbf7d0;margin-top:14px}.bad{padding:12px;border-radius:12px;background:#7f1d1d;color:#fecaca;margin-top:14px}.teams{display:grid;gap:8px;margin-top:16px}.team{padding:13px;border:0;border-radius:12px;background:#1c3653;color:white;font-weight:900}.ver{position:fixed;right:4px;bottom:3px;opacity:.2;font-size:8px}</style></head><body>
+<div class="card"><div class="ey">CONTROLE DO ESTÚDIO</div><div id="name" class="name">Conectando...</div><div id="msg" class="msg">Aguarde.</div><div id="join" class="teams"></div><div id="answers" class="answers"></div><div id="ack"></div></div><div class="ver">v4.0.0-clean</div>
+<script>
+const socket=io(),$=id=>document.getElementById(id),LET=['A','B','C','D'];let me=null,state=null,vote=null,choice=null;
+const qp=new URLSearchParams(location.search),requested=qp.get('team');
+socket.on('hello',d=>{state=d.state;renderJoin();if(requested&&!me)join(requested)});
+socket.on('state',s=>{state=s;if(me){const t=s.teams.find(x=>x.id===me);$('name').textContent=t?.name||me}});
+socket.on('connect',()=>{if(me)join(me)});
+function renderJoin(){if(me||!state)return;$('name').textContent='Escolha seu estúdio';$('msg').textContent='Cada equipe mantém este controle durante toda a partida.';$('join').innerHTML=state.teams.map(t=>`<button class="team" ${t.socketId?'disabled':''} onclick="join('${t.id}')">${t.name}${t.socketId?' • conectado':''}</button>`).join('')}
+function join(id){socket.emit('student:join',{teamId:id},r=>{if(!r?.ok){$('ack').className='bad';$('ack').textContent=r?.error||'Não foi possível conectar.';return}me=id;state=r.state;$('join').innerHTML='';$('name').textContent=r.team.name;$('msg').textContent='Controle conectado. Aguarde o próximo desafio.';$('ack').textContent='';if(r.vote)openVote(r.vote)})}
+socket.on('vote:open',openVote);function openVote(v){vote=v;choice=v.responses&&Object.prototype.hasOwnProperty.call(v.responses,me)?+v.responses[me]:null;if(!me||!v.eligible.includes(me)){$('answers').innerHTML='';$('msg').textContent='Sua equipe não participa deste desafio.';return}$('msg').textContent=v.kind==='battle'?'⚔️ Sua equipe está na Battle. Responda!':'🎯 Responda antes do tempo acabar. Você pode alterar o voto.';$('answers').innerHTML=v.question.options.map((_,i)=>`<button class="ans ${choice===i?'sel':''}" onclick="sendVote(${i})">${LET[i]}</button>`).join('');$('ack').textContent=''}
+function sendVote(i){if(!vote?.open)return;socket.emit('student:vote',{voteId:vote.id,choice:i},r=>{if(!r?.ok){$('ack').className='bad';$('ack').textContent='⚠️ '+r.error;return}choice=i;document.querySelectorAll('.ans').forEach((b,k)=>b.classList.toggle('sel',k===i));$('ack').className='ok';$('ack').textContent=`✅ Voto ${LET[i]} computado pelo servidor (${r.count}/${r.total}). Você ainda pode alterar.`})}
+socket.on('vote:tick',d=>{if(vote&&d.voteId===vote.id)$('msg').textContent=`⏱️ ${d.remaining}s para responder. Você pode alterar o voto.`});
+socket.on('vote:result',d=>{if(!vote||d.voteId!==vote.id)return;document.querySelectorAll('.ans').forEach(b=>b.disabled=true);const r=d.results[me];$('ack').className=r?.correct?'ok':'bad';$('ack').textContent=r?.correct?'✅ Sua equipe acertou!':'❌ Sua equipe não acertou desta vez.';$('msg').textContent='Resultado exibido no telão.';setTimeout(()=>{$('answers').innerHTML='';$('ack').textContent='';$('msg').textContent='Aguarde o próximo desafio.';vote=null},4500)});
+socket.on('notice',d=>{if(me)$('msg').textContent=d.body});
 </script></body></html>

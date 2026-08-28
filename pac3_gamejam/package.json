@@ -1,13 +1,16 @@
 {
-  "name": "pac3-gamejam-greenlight",
-  "version": "1.0.0",
+  "name": "gamejam-greenlight-v4",
+  "version": "4.0.0",
   "private": true,
   "scripts": {
-    "start": "node server.js"
+    "start": "node server.js",
+    "test": "node tests/smoke.js"
+  },
+  "engines": {
+    "node": ">=20 <25"
   },
   "dependencies": {
     "express": "^5.1.0",
-    "qrcode": "^1.5.4",
     "socket.io": "^4.8.1"
   }
 }

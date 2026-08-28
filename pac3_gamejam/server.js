@@ -1,350 +1,168 @@
-
 const express=require('express');
 const http=require('http');
-const os=require('os');
-const QRCode=require('qrcode');
+const path=require('path');
 const {Server}=require('socket.io');
-const app=express(), server=http.createServer(app), io=new Server(server);
-const PORT=process.env.PORT||3000;
-const APP_VERSION='3.2.0-vote-recovery';
-let game={teams:[],turnIndex:0,started:false,turnCount:1,phase:'CONCEITO',sessionId:Date.now()};
-let traceLog=[];
-function trace(type,data={}){
-  const item={ts:new Date().toISOString(),type,data};
-  traceLog.push(item);
-  if(traceLog.length>300)traceLog=traceLog.slice(-300);
-  io.emit('trace:event',item);
-}
-
-let vote=null,timer=null,voteTick=null,lastVoteResult=null;
-
-app.use((req,res,next)=>{res.set('Cache-Control','no-store, no-cache, must-revalidate, proxy-revalidate');res.set('Pragma','no-cache');res.set('Expires','0');next()});
-app.use(express.static('public'));
+const app=express(),server=http.createServer(app),io=new Server(server,{pingTimeout:20000,pingInterval:10000});
+const PORT=process.env.PORT||3000, VERSION='4.0.0-clean';
+app.use((req,res,next)=>{res.set('Cache-Control','no-store');next()});
+app.use(express.static(path.join(__dirname,'public')));
 app.get('/',(_,res)=>res.redirect('/professor.html'));
-app.get('/healthz',(_,res)=>res.json({ok:true,version:APP_VERSION,started:game.started,teams:game.teams.length,vote:pubVote(),lastVoteResult}));
-app.get('/aluno',(_,res)=>res.sendFile(__dirname+'/public/aluno.html'));
-app.get('/qr.png',async(req,res)=>{try{res.type('png').send(await QRCode.toBuffer(String(req.query.url||''),{width:420,margin:2}))}catch(e){res.status(500).send('QR error')}});
 
-function current(){return game.teams[game.turnIndex]||null}
-function emitGame(){io.emit('game:state',game)}
-function pubVote(){if(!vote)return null;return {voteId:vote.id,questionToken:vote.questionToken,open:vote.open,kind:vote.kind,optionCount:vote.optionCount,eligibleTeamIds:vote.eligible,currentChoices:{...vote.responses},endsAt:vote.endsAt,duration:vote.duration,meta:vote.meta||null}}
-function closeVote(){
- if(!vote||!vote.open)return; vote.open=false; clearTimeout(timer); clearInterval(voteTick);
- const results={}; for(const id of vote.eligible){const c=Object.prototype.hasOwnProperty.call(vote.responses,id)?vote.responses[id]:null;results[id]={choice:c,correct:c===vote.correctIndex,answered:c!==null}}
- io.emit('vote:progress',{voteId:vote.id,questionToken:vote.questionToken,count:Object.keys(vote.responses).length,total:vote.eligible.length,voterIds:Object.keys(vote.responses),eligibleTeamIds:[...vote.eligible],choices:{...vote.responses},final:true});
- const resultPayload={voteId:vote.id,questionToken:vote.questionToken,kind:vote.kind,results,correctIndex:vote.correctIndex,meta:vote.meta||null,closedAt:Date.now()};
- lastVoteResult=resultPayload;
- trace('vote:close',{voteId:vote.id,questionToken:vote.questionToken,kind:vote.kind,responses:{...vote.responses},results});
- io.emit('vote:result',resultPayload);
- io.emit('vote:closed',{voteId:vote.id,questionToken:vote.questionToken});
- setTimeout(()=>vote=null,800);
+const PHASES=['CONCEITO','GAMEPLAY','PLAYTEST','PITCH'];
+const CELL_TYPES=['challenge','bonus','challenge','setback','challenge','battle','challenge','bonus','challenge','setback','challenge','battle','challenge','bonus','challenge','setback','challenge','battle','challenge','bonus','challenge','setback','challenge','battle','challenge','bonus','challenge','setback','challenge','battle'];
+const Q=[
+['CONCEITO','No GDD, qual seção apresenta nome, estilo, público-alvo, história e regras principais?',['Conceito','Câmeras','Sonorização'],0,'O conceito apresenta a visão geral do jogo.'],
+['CONCEITO','Qual função melhor descreve um Game Design Document?',['Substituir o código-fonte','Descrever os aspectos do jogo e orientar o projeto','Registrar apenas bugs'],1,'O GDD funciona como espinha dorsal do projeto.'],
+['CONCEITO','Qual elemento pertence às especificações do jogo?',['Sistema de pontuação e ranking','Somente logotipo','Somente linguagem de programação'],0,'Pontuação, ranking, fases e jogadores integram as especificações.'],
+['CONCEITO','No planejamento de um jogo, público-alvo serve principalmente para:',['Orientar decisões de design','Definir a senha do servidor','Eliminar testes'],0,'O público-alvo influencia linguagem, desafio, interface e experiência.'],
+['CONCEITO','Uma condição de vitória deve responder a qual pergunta?',['Como o jogador sabe que alcançou o objetivo?','Qual IDE foi usada?','Quem criou o banco de dados?'],0,'A condição de vitória explicita o objetivo final.'],
+['CONCEITO','Qual item é adequado a um GDD de uma página?',['Resumo do jogo','Código completo do servidor','Todos os commits Git'],0,'O resumo apresenta história, gameplay, regras e objetivos.'],
+['CONCEITO','Qual decisão pertence ao universo do jogo?',['Como fases e cenários se conectam','Qual senha do Wi-Fi','Qual editor de texto usar'],0,'O universo descreve cenários, estrutura do mundo e conexão entre fases.'],
+['CONCEITO','Por que regras precisam estar claras no GDD?',['Para alinhar como o jogo funciona','Para impedir qualquer mudança','Para substituir playtests'],0,'Regras claras alinham a experiência pretendida.'],
+['GAMEPLAY','Gameplay descreve principalmente:',['Mecânicas, desafios e progressão','Apenas créditos','Somente requisitos de hardware'],0,'Gameplay trata de como se joga e progride.'],
+['GAMEPLAY','Qual é um sistema de recompensa de gameplay?',['XP, pontos ou itens','Nome do arquivo HTML','Resolução do monitor'],0,'Recompensas dão retorno e motivam progressão.'],
+['GAMEPLAY','Um desafio fica mais difícil ao longo das fases. Isso é exemplo de:',['Progressão de dificuldade','Menu de créditos','Backup'],0,'A progressão regula o desafio conforme o avanço.'],
+['GAMEPLAY','Qual ação é uma métrica de personagem típica?',['Andar e pular','Editar README','Criar branch'],0,'Ações e capacidades do personagem fazem parte do gameplay.'],
+['GAMEPLAY','Por que controles devem constar no GDD?',['Para definir como o jogador executa ações','Para esconder comandos','Para dispensar interface'],0,'Controles ligam intenção do jogador às ações do jogo.'],
+['GAMEPLAY','Uma recompensa é mais útil quando:',['Reforça o comportamento e a progressão desejados','É aleatória sem relação com o jogo','Impede o jogador de entender o objetivo'],0,'Recompensas devem conversar com a experiência.'],
+['GAMEPLAY','A câmera influencia o gameplay porque:',['Define como o jogador visualiza e percebe o espaço','Só muda o nome do jogo','Não interfere na experiência'],0,'A câmera é parte da percepção e navegação.'],
+['GAMEPLAY','Qual relação entre história e gameplay é mais consistente?',['As ações do jogador ajudam a avançar a narrativa','A história nunca se relaciona às ações','Gameplay só existe no menu'],0,'O GDD pergunta explicitamente como gameplay e história se relacionam.'],
+['PLAYTEST','O objetivo central de um playtest é:',['Observar a experiência real e encontrar problemas','Provar que o designer está certo','Evitar mudanças'],0,'Playtest gera evidências sobre a experiência.'],
+['PLAYTEST','Durante um playtest, o melhor comportamento da equipe é:',['Observar antes de explicar tudo ao jogador','Ensinar cada resposta','Ignorar dificuldades'],0,'Observar revela problemas de compreensão e interação.'],
+['PLAYTEST','Se vários jogadores não entendem uma regra, a equipe deve:',['Revisar regra/interface e testar novamente','Culpar os jogadores','Remover o playtest'],0,'Iteração é parte do processo de design.'],
+['PLAYTEST','Qual dado de playtest é mais útil?',['Onde jogadores travam e por quê','Apenas elogios dos amigos','Número de linhas de código'],0,'Problemas observáveis orientam melhorias.'],
+['PLAYTEST','Uma alteração feita após feedback deve ser:',['Validada em novo teste','Considerada perfeita automaticamente','Escondida do restante da equipe'],0,'Mudanças precisam ser verificadas.'],
+['PLAYTEST','O HUD deve ser avaliado porque:',['Comunica informações necessárias durante o jogo','Serve apenas como decoração','Não afeta decisões'],0,'HUD comunica estado, pontuação e recursos.'],
+['PLAYTEST','Se o desafio é impossível para quase todos, qual hipótese testar?',['Dificuldade mal calibrada','O jogo está necessariamente perfeito','O público não importa'],0,'A dificuldade deve ser calibrada ao objetivo e público.'],
+['PLAYTEST','Qual ciclo representa melhor prototipação de jogo?',['Construir → testar → aprender → ajustar','Construir → nunca testar','Planejar → publicar sem jogar'],0,'Iteração reduz incertezas.'],
+['PITCH','Em um pitch de jogo, o objetivo é:',['Comunicar claramente proposta, diferencial e experiência','Ler todo o código','Mostrar somente cronograma'],0,'Pitch sintetiza valor e experiência do projeto.'],
+['PITCH','Qual informação ajuda a explicar o diferencial do jogo?',['Principais características e atrativos','Senha do GitHub','Nome de todas as variáveis'],0,'Características principais tornam a proposta compreensível.'],
+['PITCH','Um pitch coerente deve conectar:',['Problema/proposta, público e gameplay','Somente cores','Somente tecnologia'],0,'A proposta precisa formar uma experiência coerente.'],
+['PITCH','Ao apresentar controles, o grupo deve explicar:',['Como as ações do jogador são executadas','Apenas o modelo do teclado','Somente atalhos do editor'],0,'Controles são parte essencial da experiência.'],
+['PITCH','Qual evidência fortalece um pitch após playtest?',['Mudanças realizadas a partir de observações','Afirmar que ninguém encontrou problemas','Evitar mencionar testes'],0,'Aprendizado e iteração fortalecem a justificativa.'],
+['PITCH','O cronograma no GDD registra:',['Etapas e desenvolvimento planejado','Somente a data de lançamento','Apenas nomes dos integrantes'],0,'O cronograma descreve o desenvolvimento.'],
+['PITCH','Uma boa condição de vitória deve ser:',['Compreensível e relacionada ao objetivo do jogo','Secreta para todos','Mudada a cada minuto'],0,'O jogador precisa entender o que busca alcançar.'],
+['PITCH','Qual fechamento é mais adequado ao pitch?',['Mostrar por que vale testar/continuar o projeto','Abrir o código inteiro','Repetir o título várias vezes'],0,'O fechamento reforça a proposta e próximo passo.']
+];
+
+function fresh(){
+ return {version:VERSION,sessionId:Date.now().toString(36),started:false,phase:'LOBBY',turn:0,round:1,
+ teams:[],vote:null,lastResult:null,log:[]};
 }
-function resetGame(){
- clearTimeout(timer); clearInterval(voteTick);
- vote=null;lastVoteResult=null;
- game={teams:[],turnIndex:0,started:false,turnCount:1,phase:'CONCEITO',sessionId:Date.now()};
- io.emit('vote:closed',{});
- io.emit('game:reset',{newGame:true,sessionId:game.sessionId});
- emitGame();
+let G=fresh(), voteTimer=null, tickTimer=null;
+function team(id){return G.teams.find(t=>t.id===id)}
+function publicState(){return {...G,vote:G.vote?{...G.vote,responses:{...G.vote.responses}}:null}}
+function emitState(){io.emit('state',publicState())}
+function log(type,data={}){G.log.push({at:Date.now(),type,data});if(G.log.length>200)G.log.shift()}
+function clearVoteTimers(){clearTimeout(voteTimer);clearInterval(tickTimer);voteTimer=tickTimer=null}
+function shuffleQuestion(phase){
+ const pool=Q.filter(q=>q[0]===phase), raw=pool[Math.floor(Math.random()*pool.length)];
+ const pairs=raw[2].map((text,i)=>({text,correct:i===raw[3]}));
+ for(let i=pairs.length-1;i>0;i--){const j=Math.floor(Math.random()*(i+1));[pairs[i],pairs[j]]=[pairs[j],pairs[i]]}
+ return {phase,text:raw[1],options:pairs.map(x=>x.text),correct:pairs.findIndex(x=>x.correct),why:raw[4]};
 }
 function nextTurn(){
- if(!game.teams.length)return;
- let tries=0;
- do{
-   game.turnIndex=(game.turnIndex+1)%game.teams.length;
-   tries++;
- }while(game.teams[game.turnIndex]?.eliminated&&tries<game.teams.length+1);
-
- game.turnCount++;
- const t=current();
-
- if(t?.blocked){
-   t.blocked=0;
-   t.pendingRoll=null;
-   emitGame();
-   io.emit('game:crunchReleased',{teamId:t.id,name:t.name,duration:3200});
-   setTimeout(()=>nextTurn(),3200);
-   return;
- }
- emitGame();
+ if(!G.teams.length)return;
+ G.turn=(G.turn+1)%G.teams.length;
+ if(G.turn===0)G.round++;
+ const t=G.teams[G.turn];
+ if(t.blocked){t.blocked=false;log('crunch:consumed',{teamId:t.id});io.emit('notice',{title:'🔓 CRUNCH CONSUMIDO',body:`${t.name} perde este turno e está desbloqueado.`});setTimeout(nextTurn,2400)}
+ else {G.phase='TURN';emitState()}
 }
-
-function rollCurrent(ack){
- const t=current();
- if(!game.started||!t)return ack&&ack({ok:false,message:'A partida ainda não foi iniciada.'});
- if(t.blocked)return ack&&ack({ok:false,message:'O Crunch será consumido automaticamente quando chegar o turno.'});
- if(t.moving||t.pendingRoll)return ack&&ack({ok:false,message:'O dado já está sendo lançado.'});
-
- const n=1+Math.floor(Math.random()*6);
- const from=t.pos||1;
- const target=Math.min(24,from+n);
- const session=game.sessionId;
-
- t.pendingRoll=n;
- t.moving=true;
- emitGame();
-
- // Fase 1: animação do dado por 5 segundos.
- trace('dice:rolling',{teamId:t.id,from,duration:5000});
- io.emit('game:diceRolling',{teamId:t.id,from,duration:5000});
- ack&&ack({ok:true,rolling:true});
-
- setTimeout(()=>{
-   if(game.sessionId!==session)return;
-   const live=game.teams.find(x=>x.id===t.id);
-   if(!live||!live.moving)return;
-
-   // Fase 2: revela o resultado e informa quantas casas serão percorridas.
-   trace('dice:result',{teamId:live.id,value:n,from,target});
-   io.emit('game:rolled',{teamId:live.id,value:n,from,target,displayMs:2200});
-
-   // Fase 3: volta ao mapa e caminha casa por casa.
+function finishVote(){
+ if(!G.vote||!G.vote.open)return;
+ clearVoteTimers();
+ const v=G.vote;v.open=false;
+ const results={};
+ v.eligible.forEach(id=>{const c=v.responses[id];results[id]={answered:Number.isInteger(c),choice:Number.isInteger(c)?c:null,correct:c===v.question.correct}});
+ const payload={voteId:v.id,kind:v.kind,question:v.question,results,eligible:v.eligible,actorId:v.actorId,opponentId:v.opponentId};
+ G.lastResult=payload; log('vote:finish',payload);
+ io.emit('vote:result',payload);
+ setTimeout(()=>{G.vote=null;emitState()},800);
+}
+function openVote({kind='collective',actorId,opponentId=null,duration=20}){
+ if(G.vote?.open)return;
+ const actor=team(actorId); if(!actor)return;
+ const eligible=kind==='battle'?[actorId,opponentId].filter(Boolean):G.teams.filter(t=>!t.blocked).map(t=>t.id);
+ const question=shuffleQuestion(actor.phase||'CONCEITO');
+ G.vote={id:`V-${Date.now()}-${Math.random().toString(36).slice(2,6)}`,kind,actorId,opponentId,eligible,question,responses:{},open:true,endsAt:Date.now()+duration*1000,duration};
+ log('vote:open',{voteId:G.vote.id,eligible,kind});
+ io.emit('vote:open',G.vote); emitState();
+ tickTimer=setInterval(()=>{if(!G.vote?.open)return;io.emit('vote:tick',{voteId:G.vote.id,remaining:Math.max(0,Math.ceil((G.vote.endsAt-Date.now())/1000))})},500);
+ voteTimer=setTimeout(finishVote,duration*1000);
+}
+function land(actor){
+ const pos=actor.pos, type=CELL_TYPES[(pos-1)%CELL_TYPES.length];
+ actor.cellType=type;
+ if(type==='bonus'){actor.xp+=1;io.emit('notice',{title:'⭐ POWER-UP',body:`${actor.name} recebe +1 XP.`});setTimeout(()=>{emitState();nextTurn()},2200);return}
+ if(type==='setback'){actor.pos=Math.max(1,actor.pos-1);io.emit('notice',{title:'↩️ REVÉS',body:`${actor.name} volta 1 casa.`});setTimeout(()=>{emitState();nextTurn()},2200);return}
+ if(type==='battle'){
+   const others=G.teams.filter(t=>t.id!==actor.id&&!t.blocked);
+   const opp=others.sort((a,b)=>a.xp-b.xp)[0];
+   if(!opp){openVote({actorId:actor.id});return}
+   openVote({kind:'battle',actorId:actor.id,opponentId:opp.id});return
+ }
+ openVote({actorId:actor.id});
+}
+function roll(){
+ if(!G.started||G.phase!=='TURN'||G.vote?.open)return;
+ const actor=G.teams[G.turn];if(!actor)return;
+ G.phase='DICE';emitState();
+ const value=1+Math.floor(Math.random()*6),from=actor.pos,target=Math.min(30,from+value);
+ log('dice',{teamId:actor.id,value,from,target});
+ io.emit('dice:rolling',{teamId:actor.id,duration:5000});
+ setTimeout(()=>{io.emit('dice:result',{teamId:actor.id,value,from,target});
    setTimeout(()=>{
-     if(game.sessionId!==session)return;
-     const movingTeam=game.teams.find(x=>x.id===t.id);
-     if(!movingTeam||!movingTeam.moving)return;
-
-     const actualSteps=Math.max(0,target-from);
-     if(actualSteps===0){
-       movingTeam.pendingRoll=null;movingTeam.moving=false;
-       movingTeam.revealed=movingTeam.revealed||{};movingTeam.revealed[movingTeam.pos]=true;
-       emitGame();
-       io.emit('game:moved',{teamId:movingTeam.id,roll:n,from,to:movingTeam.pos});
-       return;
-     }
-
-     let step=0;
-     const walk=()=>{
-       if(game.sessionId!==session)return;
-       const currentTeam=game.teams.find(x=>x.id===t.id);
-       if(!currentTeam||!currentTeam.moving)return;
-       step++;
-       currentTeam.pos=Math.min(target,from+step);
-       emitGame();
-       trace('move:step',{teamId:currentTeam.id,roll:n,step,totalSteps:actualSteps,pos:currentTeam.pos,from,target});
-       io.emit('game:step',{teamId:currentTeam.id,roll:n,step,totalSteps:actualSteps,pos:currentTeam.pos,from,target});
-       if(step<actualSteps){
-         setTimeout(walk,900);
-       }else{
-         currentTeam.pendingRoll=null;
-         currentTeam.moving=false;
-         currentTeam.revealed=currentTeam.revealed||{};
-         currentTeam.revealed[currentTeam.pos]=true;
-         emitGame();
-         setTimeout(()=>io.emit('game:moved',{teamId:currentTeam.id,roll:n,from,to:currentTeam.pos}),820);
-       }
-     };
-     walk();
-   },2200);
+    G.phase='MOVE';let step=from;
+    const iv=setInterval(()=>{step++;actor.pos=step;emitState();io.emit('move:step',{teamId:actor.id,pos:step,target});
+      if(step>=target){clearInterval(iv);setTimeout(()=>{actor.phase=PHASES[Math.min(PHASES.length-1,Math.floor((actor.pos-1)/8))];land(actor)},650)}
+    },650);
+   },1800);
  },5000);
 }
-function activateCurrentPath(teamId,ack){
- const t=current();
- if(!t)return ack&&ack({ok:false,message:'Nenhum estúdio ativo.'});
- if(teamId && t.id!==String(teamId))return ack&&ack({ok:false,message:'O turno mudou. Selecione novamente o estúdio atual.'});
- t.pendingPath=true;
- emitGame();
- io.emit('game:pathActivated',{teamId:t.id});
- ack&&ack({ok:true,teamId:t.id});
-}
-function cancelCurrentPath(ack){
- const t=current();
- if(t)t.pendingPath=null;
- emitGame();
- io.emit('game:pathCancelled',{teamId:t?.id||null});
- ack&&ack({ok:true});
-}
-function chooseCurrentPath(choice,ack){
- const t=current();
- if(!t)return ack&&ack({ok:false,message:'Nenhum estúdio ativo.'});
- if(!['risk','safe'].includes(choice))return ack&&ack({ok:false,message:'Rota inválida.'});
-
- // Recuperação segura: se o popup está aberto mas pendingPath se perdeu,
- // a escolha do Game Master/equipe ainda resolve a bifurcação do estúdio atual.
- t.pendingPath=false;
- t.routeChoice=choice;
-
- let result;
- if(choice==='safe'){
-   t.points=(t.points||0)+1;
-   result={choice,teamId:t.id,kind:'safe',message:'Rota segura: +1 XP.',pointsDelta:1,blocked:false};
+function applyResult(d){
+ const actor=team(d.actorId); if(!actor)return;
+ if(d.kind==='battle'){
+   const opp=team(d.opponentId), ar=d.results[actor.id], br=opp&&d.results[opp.id];
+   if(ar?.correct){actor.xp+=2;actor.blocked=false}else{actor.xp=Math.max(0,actor.xp-1);actor.blocked=true}
+   if(opp){if(br?.correct){opp.xp+=2;opp.blocked=false}else{opp.xp=Math.max(0,opp.xp-1);opp.blocked=true}}
  }else{
-   if(Math.random()<0.6){
-     t.points=(t.points||0)+2;
-     result={choice,teamId:t.id,kind:'risk_success',message:'Exploração bem-sucedida: +2 XP!',pointsDelta:2,blocked:false};
-   }else{
-     t.blocked=1;
-     result={choice,teamId:t.id,kind:'risk_fail',message:'A rota arriscada gerou Crunch.',pointsDelta:0,blocked:true};
-   }
+   Object.entries(d.results).forEach(([id,r])=>{const t=team(id);if(t&&r.correct)t.xp++});
+   if(!d.results[actor.id]?.correct)actor.blocked=true;
  }
- emitGame();
- io.emit('game:pathResolved',result);
- ack&&ack({ok:true,result});
+ emitState();
+ setTimeout(nextTurn,5200);
 }
-
-function applyGameEffect(d,ack){
- const t=game.teams.find(x=>x.id===String(d?.teamId||'')) || current();
- if(!t)return ack&&ack({ok:false,message:'Estúdio inválido.'});
-
- const kind=String(d?.kind||'');
- const amount=Number(d?.amount||0);
- let result={ok:true,teamId:t.id,kind,message:''};
-
- if(kind==='points'){
-   t.points=Math.max(0,(t.points||0)+amount);
-   result.points=t.points;
-   result.message=`${amount>=0?'+':''}${amount} XP.`;
- }
- else if(kind==='block'){
-   t.blocked=1;
-   result.blocked=true;
-   result.message='Crunch aplicado: perde o próximo turno.';
- }
- else if(kind==='move'){
-   const oldPos=t.pos||1;
-   let delta=amount;
-
-   // Hotfix pode anular automaticamente UMA penalidade de recuo.
-   // Só é consumido em deslocamento negativo.
-   if(delta<0 && (t.inventory?.hotfix||0)>0 && d?.allowHotfix!==false){
-     t.inventory.hotfix--;
-     result.hotfixUsed=true;
-     result.oldPos=oldPos;
-     result.newPos=oldPos;
-     result.message='🔧 Hotfix usado: a penalidade de recuo foi anulada.';
-   } else {
-     const newPos=Math.max(1,Math.min(24,oldPos+delta));
-     const wasRevealed=!!(t.revealed&&t.revealed[newPos]);
-     t.pos=newPos;
-     t.pendingRoll=null;
-     t.revealed=t.revealed||{};
-     t.revealed[newPos]=true;
-     result.oldPos=oldPos;
-     result.newPos=newPos;
-     result.wasRevealed=wasRevealed;
-     result.message=`${delta<0?'Recuo':'Avanço'}: casa ${oldPos} → ${newPos}.`;
-   }
- }
- else if(kind==='inventory'){
-   const item=String(d?.item||'');
-   if(!['insight','hotfix','pivot'].includes(item))
-     return ack&&ack({ok:false,message:'Power-up inválido.'});
-   t.inventory=t.inventory||{insight:0,hotfix:0,pivot:0};
-   t.inventory[item]=Math.max(0,(t.inventory[item]||0)+(amount||1));
-   result.inventory={...t.inventory};
-   result.message=`Power-up ${item} atualizado.`;
- }
- else if(kind==='clearAllCrunch'){
-   game.teams.forEach(x=>x.blocked=0);
-   result.message='Todos os Crunch foram removidos.';
- }
- else{
-   return ack&&ack({ok:false,message:'Efeito desconhecido.'});
- }
-
- emitGame();
- io.emit('game:effectApplied',result);
- ack&&ack({ok:true,result});
-}
-
 io.on('connection',socket=>{
- socket.emit('app:version',{version:APP_VERSION});
- trace('socket:connect',{socketId:socket.id});
- socket.emit('trace:snapshot',traceLog);
- socket.on('trace:request',(_,ack)=>ack&&ack({ok:true,version:APP_VERSION,items:traceLog.slice(-300),game,vote:pubVote(),lastVoteResult}));
- socket.emit('game:state',game);
- socket.emit('vote:sync',{vote:pubVote(),lastVoteResult}); if(vote&&vote.open)socket.emit('vote:open',pubVote());
- socket.on('professor:state',d=>{if(d&&Array.isArray(d.teams)){game=d;emitGame()}});
- socket.on('professor:reset',()=>resetGame());
- socket.on('professor:roll',(_,ack)=>rollCurrent(ack));
- socket.on('professor:activatePath',(d,ack)=>activateCurrentPath(d?.teamId,ack));
- socket.on('professor:path',(d,ack)=>chooseCurrentPath(d?.choice,ack));
- socket.on('professor:cancelPath',(_,ack)=>cancelCurrentPath(ack));
- socket.on('professor:setTurn',(d,ack)=>{const i=game.teams.findIndex(t=>t.id===String(d?.teamId||''));if(i<0)return ack&&ack({ok:false,message:'Estúdio inválido.'});game.turnIndex=i;emitGame();ack&&ack({ok:true})});
- socket.on('professor:clearCrunch',(d,ack)=>{
-   const t=game.teams.find(x=>x.id===String(d?.teamId||''));
-   if(!t)return ack&&ack({ok:false,message:'Estúdio inválido.'});
-   t.blocked=0;t.pendingRoll=null;emitGame();ack&&ack({ok:true,teamId:t.id});
+ socket.emit('hello',{version:VERSION,state:publicState()});
+ if(G.vote?.open)socket.emit('vote:open',G.vote);
+ socket.on('professor:setup',(d,ack)=>{
+   const n=Math.max(2,Math.min(10,+d.count||7));clearVoteTimers();G=fresh();
+   G.teams=Array.from({length:n},(_,i)=>({id:`T${i+1}`,name:`Estúdio ${i+1}`,pos:1,xp:0,blocked:false,phase:'CONCEITO',cellType:null}));
+   log('setup',{n});emitState();ack&&ack({ok:true});
  });
- socket.on('professor:consumeCrunch',(d,ack)=>{
-   const t=current();
-   if(!t)return ack&&ack({ok:false,message:'Nenhum estúdio ativo.'});
-   if(d?.teamId && t.id!==String(d.teamId))return ack&&ack({ok:false,message:'O turno mudou.'});
-   t.blocked=0;t.pendingRoll=null;emitGame();ack&&ack({ok:true,teamId:t.id});
- });
- socket.on('professor:openVote',(d,ack)=>{
-   // Cancela votação residual sem publicar resultado antigo.
-   if(vote&&vote.open){
-     clearTimeout(timer); clearInterval(voteTick);
-     io.emit('vote:closed',{voteId:vote.id,cancelled:true});
-     vote=null;
-   }
-
-   const duration=Math.max(1,+d.duration||20);
-   const now=Date.now();
-   vote={
-     id:'V'+now,open:true,kind:d.kind||'collective',
-     optionCount:+d.optionCount||4,correctIndex:+d.correctIndex,
-     eligible:[...new Set(d.eligibleTeamIds||[])],
-     responses:{},questionToken:String(d.questionToken||('Q'+now)),meta:d.meta||null,openedAt:now,duration,endsAt:now+duration*1000
-   };
-
-   trace('vote:open',{voteId:vote.id,questionToken:vote.questionToken,kind:vote.kind,eligible:vote.eligible,duration:vote.duration});
-   io.emit('vote:open',pubVote());
-   io.emit('vote:progress',{voteId:vote.id,questionToken:vote.questionToken,count:0,total:vote.eligible.length,voterIds:[],eligibleTeamIds:[...vote.eligible],choices:{}});
-   io.emit('vote:tick',{voteId:vote.id,questionToken:vote.questionToken,remaining:duration});
-
-   clearInterval(voteTick);
-   voteTick=setInterval(()=>{
-     if(!vote||!vote.open){clearInterval(voteTick);return}
-     const remaining=Math.max(0,Math.ceil((vote.endsAt-Date.now())/1000));
-     io.emit('vote:tick',{voteId:vote.id,questionToken:vote.questionToken,remaining});
-     if(remaining<=0)clearInterval(voteTick);
-   },250);
-
-   timer=setTimeout(closeVote,duration*1000);
-   ack&&ack({ok:true,voteId:vote.id,questionToken:vote.questionToken,duration,endsAt:vote.endsAt});
- });
- socket.on('professor:applyEffect',(d,ack)=>applyGameEffect(d,ack));
- socket.on('professor:voteSync',(_,ack)=>ack&&ack({ok:true,vote:pubVote(),lastVoteResult}));
-  socket.on('professor:closeVote',()=>closeVote());
- socket.on('professor:nextTurn',()=>nextTurn());
- socket.on('student:hello',d=>{socket.data.teamId=d?.teamId||null;socket.emit('game:state',game);if(vote&&vote.open)socket.emit('vote:open',pubVote())});
+ socket.on('professor:start',(_,ack)=>{if(G.teams.length<2)return ack&&ack({ok:false});G.started=true;G.phase='TURN';G.turn=0;G.round=1;emitState();ack&&ack({ok:true})});
+ socket.on('professor:roll',()=>roll());
+ socket.on('professor:reset',()=>{clearVoteTimers();G=fresh();emitState()});
+ socket.on('professor:forceNext',()=>{clearVoteTimers();G.vote=null;nextTurn()});
  socket.on('student:join',(d,ack)=>{
-   const id=String(d?.teamId||''); if(socket.data.teamId&&socket.data.teamId!==id)return ack&&ack({ok:false,message:'Este aparelho já está vinculado a outro estúdio.'});
-   if(!game.teams.some(t=>t.id===id))return ack&&ack({ok:false,message:'Estúdio inválido.'});
-   socket.data.teamId=id; ack&&ack({ok:true}); socket.emit('game:state',game);
- });
- socket.on('student:roll',(d,ack)=>{
-   const t=current(),id=String(d?.teamId||''); if(!game.started||!t||t.id!==id)return ack&&ack({ok:false,message:'Não é o turno do seu estúdio.'});
-   rollCurrent(ack);
- });
- socket.on('student:path',(d,ack)=>{
-   const t=current(),id=String(d?.teamId||''); if(!t||t.id!==id)return ack&&ack({ok:false,message:'Não é o seu turno.'});
-   chooseCurrentPath(d?.choice,ack);
- });
- socket.on('student:power',(d,ack)=>{
-   const t=game.teams.find(x=>x.id===String(d?.teamId||'')); if(!t)return ack&&ack({ok:false});
-   const p=String(d?.power||''); if(!t.inventory?.[p])return ack&&ack({ok:false,message:'Power-up indisponível.'});
-   io.emit('game:powerRequest',{teamId:t.id,power:p}); ack&&ack({ok:true,message:'Solicitação enviada ao Game Master.'});
+   const t=team(String(d.teamId||''));if(!t)return ack&&ack({ok:false,error:'Equipe inválida'});
+   if(t.socketId&&t.socketId!==socket.id)return ack&&ack({ok:false,error:'Esta equipe já possui um controle conectado.'});
+   t.socketId=socket.id;socket.data.teamId=t.id;socket.join(t.id);log('join',{teamId:t.id,socketId:socket.id});emitState();ack&&ack({ok:true,team:t,state:publicState(),vote:G.vote});
  });
  socket.on('student:vote',(d,ack)=>{
-   if(!vote||!vote.open)return ack&&ack({ok:false,message:'Votação encerrada.'});
-   if(String(d?.voteId||'')!==vote.id)return ack&&ack({ok:false,message:'Esta pergunta já mudou. Aguarde a questão atual.'});
-   const id=String(d?.teamId||'');
-   if(socket.data.teamId && socket.data.teamId!==id)return ack&&ack({ok:false,message:'Este controle está vinculado a outro estúdio.'});
-   if(!vote.eligible.includes(id))return ack&&ack({ok:false,message:'Seu estúdio acompanha, mas não responde esta rodada.'});
-   const c=+d.choice;
-   if(!Number.isInteger(c)||c<0||c>=vote.optionCount)return ack&&ack({ok:false,message:'Alternativa inválida.'});
-   vote.responses[id]=c;
-   trace('vote:accepted',{voteId:vote.id,questionToken:vote.questionToken,teamId:id,choice:c});
-   const voterIds=Object.keys(vote.responses);
-   const progress={voteId:vote.id,questionToken:vote.questionToken,count:voterIds.length,total:vote.eligible.length,voterIds,eligibleTeamIds:[...vote.eligible],choices:{...vote.responses}};
-   io.emit('vote:progress',progress);
-   io.emit('vote:accepted',{voteId:vote.id,questionToken:vote.questionToken,teamId:id,count:voterIds.length,total:vote.eligible.length});
-   ack&&ack({ok:true,voteId:vote.id,choice:c,count:voterIds.length,total:vote.eligible.length});
+   const id=socket.data.teamId,v=G.vote;
+   if(!id||!v?.open)return ack&&ack({ok:false,error:'Não há votação ativa.'});
+   if(d.voteId!==v.id)return ack&&ack({ok:false,error:'Votação desatualizada.'});
+   if(!v.eligible.includes(id))return ack&&ack({ok:false,error:'Sua equipe não participa desta votação.'});
+   const choice=+d.choice;if(!Number.isInteger(choice)||choice<0||choice>=v.question.options.length)return ack&&ack({ok:false,error:'Alternativa inválida.'});
+   v.responses[id]=choice;log('vote',{voteId:v.id,teamId:id,choice});
+   const voterIds=Object.keys(v.responses);
+   io.emit('vote:progress',{voteId:v.id,voterIds,count:voterIds.length,total:v.eligible.length});
+   ack&&ack({ok:true,choice,count:voterIds.length,total:v.eligible.length});
  });
- socket.on('disconnect',reason=>trace('socket:disconnect',{socketId:socket.id,teamId:socket.data.teamId||null,reason}));
+ socket.on('professor:resultApplied',(d)=>{if(G.lastResult&&d.voteId===G.lastResult.voteId){applyResult(G.lastResult);G.lastResult=null}});
+ socket.on('disconnect',()=>{const id=socket.data.teamId,t=team(id);if(t&&t.socketId===socket.id){t.socketId=null;emitState()}});
 });
-function ips(){let a=[];for(const xs of Object.values(os.networkInterfaces()))for(const x of xs||[])if(x.family==='IPv4'&&!x.internal)a.push(x.address);return a}
-server.listen(PORT,'0.0.0.0',()=>{console.log('\nPAC III — Game Jam: Corrida pelo Greenlight');console.log(`Professor: http://localhost:${PORT}/professor.html`);for(const ip of ips())console.log(`Alunos: http://${ip}:${PORT}/aluno`);console.log('')});
+app.get('/healthz',(_,res)=>res.json({ok:true,version:VERSION,phase:G.phase,started:G.started,teams:G.teams.map(t=>({id:t.id,connected:!!t.socketId,pos:t.pos,xp:t.xp,blocked:t.blocked})),vote:G.vote?{id:G.vote.id,open:G.vote.open,eligible:G.vote.eligible,voters:Object.keys(G.vote.responses),endsAt:G.vote.endsAt}:null,lastResult:G.lastResult?{voteId:G.lastResult.voteId,kind:G.lastResult.kind}:null}));
+server.listen(PORT,()=>console.log(`Game Jam Greenlight ${VERSION} on ${PORT}`));
