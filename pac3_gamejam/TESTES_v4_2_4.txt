@@ -1,0 +1,17 @@
+GAME JAM GREENLIGHT v4.2.4 — RECONEXÃO + DADO NO CELULAR
+
+CORREÇÕES
+- O celular mantém teamId/controlId somente durante a mesma sessionId.
+- Atualizar a página ou reconectar durante a mesma partida mantém o Estúdio reservado.
+- Outro celular não consegue assumir Estúdio ocupado.
+- Novo jogo gera nova sessionId e invalida automaticamente os vínculos anteriores.
+- O dado agora é lançado pelo controle da equipe da vez.
+- Somente o controlId vinculado à equipe da vez pode chamar /api/roll.
+- Os demais celulares mostram "Aguardando jogada de ...".
+- O professor não possui mais botão para lançar o dado; acompanha a animação no telão.
+- Crunch impede o botão de dado naquele turno.
+
+VALIDAÇÃO
+30/30 cenários de integração PASS
+5/5 eventos SSE PASS
+Sintaxe server/professor/aluno PASS

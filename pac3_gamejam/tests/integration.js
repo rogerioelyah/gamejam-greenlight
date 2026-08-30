@@ -14,21 +14,29 @@ async function waitFor(fn,timeout=4000,label='condition'){const end=Date.now()+t
  try{
   await waitFor(async()=>{try{return (await jsonGet('/healthz')).ok}catch{return false}},2500,'server');
   console.log('PASS server starts without npm dependencies');
-  let x=await get('/professor.html');assert(x.r.status===200&&x.t.includes('v4.2.3-fresh-session'),'professor page');console.log('PASS professor page');
+  let x=await get('/professor.html');assert(x.r.status===200&&x.t.includes('v4.2.4-reconnect-dice-control'),'professor page');console.log('PASS professor page');
   assert(x.t.includes("if(s.phase==='TURN')hide()"),'TURN must close stale overlay');console.log('PASS TURN closes podium/notice/result overlay');
   assert(x.t.includes('FECHAR PÓDIO'),'podium manual escape');console.log('PASS podium has manual escape');
   assert(x.t.includes('INICIAR NOVO JOGO')&&x.t.includes('resetGame()'),'final reset button');console.log('PASS final screen has restart button');
   x=await get('/aluno.html');assert(x.r.status===200&&x.t.includes('Voto'),'student page');console.log('PASS student page');
-  assert(!x.t.includes("localStorage.setItem('gamejam_team'")&&!x.t.includes("localStorage.setItem('gamejam_control'"),'no persistent control/team binding');console.log('PASS student control binding is not persisted');
-  assert(x.t.includes('sessionId!==sessionSeen')&&x.t.includes('localStorage.clear();sessionStorage.clear()'),'fresh session cleanup');console.log('PASS new game/session clears client state');
+  assert(x.t.includes("localStorage.setItem('gamejam_team'")&&x.t.includes("localStorage.setItem('gamejam_session'"),'session-scoped reconnect binding');console.log('PASS same-session control binding is persisted for reconnect');
+  assert(x.t.includes('incoming.sessionId!==sessionSeen')&&x.t.includes("localStorage.removeItem('gamejam_team')"),'new session clears old team binding');console.log('PASS new game/session invalidates previous team binding');
+  assert(x.t.includes('🎲 ROLAR DADO')&&x.t.includes("api('/api/roll',{teamId:me,controlId})"),'student dice control');console.log('PASS active team rolls dice from cellphone');
+  assert(x.t.includes('Aguardando jogada de'),'waiting controls status');console.log('PASS other controls wait for active team');
   let pp=await get('/professor.html');assert(pp.t.includes('localStorage.clear();sessionStorage.clear();await api(\'/api/reset\')'),'professor reset clears browser storage');console.log('PASS professor reset clears browser state');
+  assert(!pp.t.includes('id="roll"')&&pp.t.includes('dado pelo controle da equipe'),'professor must not roll dice');console.log('PASS Game Master no longer rolls dice');
   x=await get('/qr.svg?text='+encodeURIComponent(BASE+'/aluno.html'));assert(x.r.status===200&&x.t.includes('<svg'),'qr');console.log('PASS QR generated locally');
   let r=await post('/api/setup',{count:3,names:['Alpha','Beta','Gamma']});assert(r.ok&&r.state.teams[0].name==='Alpha','setup');console.log('PASS setup names');
   assert((await post('/api/join',{teamId:'T1',controlId:'C1'})).ok,'join1');assert((await post('/api/join',{teamId:'T2',controlId:'C2'})).ok,'join2');assert((await post('/api/join',{teamId:'T3',controlId:'C3'})).ok,'join3');
+  assert((await post('/api/join',{teamId:'T2',controlId:'C2'})).ok,'same control reconnect');console.log('PASS same control can reconnect to occupied team');
+
   r=await post('/api/join',{teamId:'T1',controlId:'OTHER'});assert(r.status===409,'team lock');console.log('PASS team lock');
   assert((await post('/api/unlock',{teamId:'T3'})).ok,'unlock');assert((await post('/api/join',{teamId:'T3',controlId:'C3'})).ok,'rejoin after unlock');console.log('PASS Game Master can release a control before start');
   assert((await post('/api/start')).ok,'start');console.log('PASS start with connected controls');
-  assert((await post('/api/roll')).ok,'roll');
+  let denied=await post('/api/roll',{teamId:'T2',controlId:'C2'});assert(denied.status===403,'wrong team cannot roll');console.log('PASS non-active team cannot roll dice');
+  denied=await post('/api/roll',{teamId:'T1',controlId:'WRONG'});assert(denied.status===403,'wrong control cannot roll');console.log('PASS unbound control cannot roll dice');
+
+  assert((await post('/api/roll',{teamId:'T1',controlId:'C1'})).ok,'roll');
   let st=await waitFor(async()=>{const s=await jsonGet('/api/state');return s.vote&&s.vote.open?s:null},1800,'battle vote');assert(st.vote.kind==='battle','battle expected');assert(st.vote.eligible.length===2&&st.vote.eligible.includes('T1')&&st.vote.eligible.includes('T2')&&!st.vote.eligible.includes('T3'),'battle must have exactly 2 teams');console.log('PASS Battle has exactly 2 teams');assert(st.teams[0].pos===6,'dice moved stepwise to 6');console.log('PASS dice + movement + Battle landing');
   const v=st.vote,correct=v.question.correct,wrong=(correct+1)%v.question.options.length;
   r=await post('/api/vote',{voteId:v.id,teamId:'T1',controlId:'C1',choice:wrong});assert(r.ok,'vote wrong first');r=await post('/api/vote',{voteId:v.id,teamId:'T1',controlId:'C1',choice:correct});assert(r.ok,'change vote');r=await post('/api/vote',{voteId:v.id,teamId:'T2',controlId:'C2',choice:wrong});assert(r.ok,'vote2');
@@ -58,18 +66,18 @@ async function waitFor(fn,timeout=4000,label='condition'){const end=Date.now()+t
   console.log('PASS Pitch has 5 unique questions and only arriving team answers');
 
   // bonus cell: Gamma at 7, dice=1 -> 8
-  await post('/api/test/set',{turn:2,teamId:'T3',pos:7,phase:'TURN',started:true});await post('/api/roll');await waitFor(async()=>{const s=await jsonGet('/api/state');return s.teams[2].xp===1?s:null},1200,'bonus');console.log('PASS bonus +1 XP');
+  await post('/api/test/set',{turn:2,teamId:'T3',pos:7,phase:'TURN',started:true});await post('/api/roll',{teamId:'T3',controlId:'C3'});await waitFor(async()=>{const s=await jsonGet('/api/state');return s.teams[2].xp===1?s:null},1200,'bonus');console.log('PASS bonus +1 XP');
   // setback: Alpha at 9, dice=1 -> 10 then back to 9
-  await post('/api/test/set',{turn:0,teamId:'T1',pos:9,phase:'TURN',started:true});await post('/api/roll');await waitFor(async()=>{const s=await jsonGet('/api/state');return s.teams[0].pos===9&&s.phase!=='DICE'&&s.phase!=='MOVE'?s:null},1200,'setback');console.log('PASS setback returns 1 house');
+  await post('/api/test/set',{turn:0,teamId:'T1',pos:9,phase:'TURN',started:true});await post('/api/roll',{teamId:'T1',controlId:'C1'});await waitFor(async()=>{const s=await jsonGet('/api/state');return s.teams[0].pos===9&&s.phase!=='DICE'&&s.phase!=='MOVE'?s:null},1200,'setback');console.log('PASS setback returns 1 house');
   // final: Alpha at 29, dice=1 -> 30, answer 5 pitch questions correctly
-  await post('/api/test/set',{turn:0,teamId:'T1',pos:29,phase:'TURN',started:true});await post('/api/roll');
+  await post('/api/test/set',{turn:0,teamId:'T1',pos:29,phase:'TURN',started:true});await post('/api/roll',{teamId:'T1',controlId:'C1'});
   for(let i=1;i<=5;i++){
     st=await waitFor(async()=>{const s=await jsonGet('/api/state');return s.vote?.open&&s.vote.kind==='pitch-final'&&s.vote.pitchStep===i?s:null},1600,'pitch '+i);
     const pv=st.vote;assert(pv.eligible.length===1&&pv.eligible[0]==='T1','only finalist may answer pitch');await post('/api/vote',{voteId:pv.id,teamId:'T1',controlId:'C1',choice:pv.question.correct});
   }
   st=await waitFor(async()=>{const s=await jsonGet('/api/state');return s.winnerId==='T1'?s:null},2500,'final winner');assert(st.pitch.hits>=3,'3/5');console.log('PASS Pitch Day 5 questions / minimum 3 / winner');
-  const hz=await jsonGet('/healthz');assert(hz.version==='4.2.3-fresh-session'&&hz.winnerId==='T1','health');console.log('PASS health/diagnostic state');
+  const hz=await jsonGet('/healthz');assert(hz.version==='4.2.4-reconnect-dice-control'&&hz.winnerId==='T1','health');console.log('PASS health/diagnostic state');
   r=await post('/api/reset');assert(r.ok&&!r.state.started&&r.state.teams.length===0,'reset');console.log('PASS reset creates fresh game');
-  console.log('TOTAL 25/25 INTEGRATION SCENARIOS PASS');
+  console.log('TOTAL 30/30 INTEGRATION SCENARIOS PASS');
  }catch(e){console.error('FAIL',e.stack);console.error(out);process.exitCode=1}finally{child.kill('SIGTERM')}
 })();

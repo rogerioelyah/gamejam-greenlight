@@ -7,7 +7,7 @@ const QRCode=require('./vendor/QRCode');
 const QRErrorCorrectLevel=require('./vendor/QRCode/QRErrorCorrectLevel');
 
 const PORT=Number(process.env.PORT||3000);
-const VERSION='4.2.3-fresh-session';
+const VERSION='4.2.4-reconnect-dice-control';
 const PUBLIC=path.join(__dirname,'public');
 const DUR={
   dice:Number(process.env.DICE_MS||5000),
@@ -117,7 +117,14 @@ async function api(req,res,url){if(req.method==='GET'&&url.pathname==='/api/stat
  if(url.pathname==='/api/unlock'){if(G.started)return json(res,409,{ok:false,error:'Só é possível liberar controles antes de iniciar.'});const t=team(String(d.teamId||''));if(!t)return json(res,404,{ok:false,error:'Equipe não encontrada.'});t.controlId=null;t.lastSeen=0;log('unlock',{teamId:t.id});emitState();return json(res,200,{ok:true})}
  if(url.pathname==='/api/start'){if(G.teams.filter(t=>t.controlId).length<2)return json(res,409,{ok:false,error:'Conecte pelo menos 2 controles.'});G.started=true;G.phase='TURN';G.turn=0;G.round=1;log('start');emitState();return json(res,200,{ok:true})}
  if(url.pathname==='/api/reset'){reset();return json(res,200,{ok:true,state:publicState()})}
- if(url.pathname==='/api/roll'){return json(res,roll()?200:409,{ok:!!(G.phase==='DICE'),error:G.phase==='DICE'?null:'Não é possível rolar agora.'})}
+ if(url.pathname==='/api/roll'){
+   const actor=G.teams[G.turn],teamId=String(d.teamId||''),controlId=String(d.controlId||'');
+   if(!actor)return json(res,409,{ok:false,error:'Não há equipe no turno.'});
+   if(teamId!==actor.id)return json(res,403,{ok:false,error:`É a vez de ${actor.name}.`});
+   if(actor.controlId!==controlId)return json(res,403,{ok:false,error:'Este controle não está vinculado à equipe da vez.'});
+   const ok=roll();
+   return json(res,ok?200:409,{ok,error:ok?null:'Não é possível rolar agora.'})
+ }
  if(url.pathname==='/api/join'){const t=team(String(d.teamId||'')),cid=String(d.controlId||'');if(!t||!cid)return json(res,400,{ok:false,error:'Equipe/controle inválido.'});if(t.controlId&&t.controlId!==cid)return json(res,409,{ok:false,error:'Esta equipe já possui um controle vinculado.'});t.controlId=cid;t.lastSeen=Date.now();log('join',{teamId:t.id,controlId:cid});emitState();return json(res,200,{ok:true,team:visibleTeam(t),state:publicState()})}
  if(url.pathname==='/api/ping'){const t=team(String(d.teamId||''));if(t&&t.controlId===String(d.controlId||''))t.lastSeen=Date.now();return json(res,200,{ok:true})}
  if(url.pathname==='/api/vote'){const v=G.vote,t=team(String(d.teamId||'')),cid=String(d.controlId||'');if(!v?.open)return json(res,409,{ok:false,error:'Não há votação ativa.'});if(!t||t.controlId!==cid)return json(res,403,{ok:false,error:'Controle não vinculado a esta equipe.'});if(String(d.voteId)!==v.id)return json(res,409,{ok:false,error:'Votação desatualizada.'});if(!v.eligible.includes(t.id))return json(res,403,{ok:false,error:'Sua equipe não participa desta votação.'});const choice=Number(d.choice);if(!Number.isInteger(choice)||choice<0||choice>=v.question.options.length)return json(res,400,{ok:false,error:'Alternativa inválida.'});v.responses[t.id]=choice;log('vote',{voteId:v.id,teamId:t.id,choice});broadcast('vote:progress',{voteId:v.id,voterIds:Object.keys(v.responses),count:Object.keys(v.responses).length,total:v.eligible.length});emitState();return json(res,200,{ok:true,choice,count:Object.keys(v.responses).length,total:v.eligible.length})}
