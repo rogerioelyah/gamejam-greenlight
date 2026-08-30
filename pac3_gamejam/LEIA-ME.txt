@@ -1,43 +1,51 @@
-GAME JAM: CORRIDA PELO GREENLIGHT — v4.0.0 CLEAN
+GAME JAM: CORRIDA PELO GREENLIGHT — v4.2.0 PLAYABLE
 
-Reconstrução integral, sem reaproveitar o fluxo de votação das versões 2.x/3.x.
+Esta versão foi reconstruída para uso real em sala sem Express, Socket.IO ou CDN.
+O servidor usa somente módulos nativos do Node.js (HTTP + Server-Sent Events + POST JSON).
+O QR Code é gerado localmente pelo próprio servidor; não depende de internet externa.
 
-ARQUITETURA
-- Node.js + Express + Socket.IO
-- server.js é a única fonte de verdade da partida, votação, cronômetro e turnos.
-- professor.html apenas renderiza e envia comandos do Game Master.
-- aluno.html funciona como controle persistente de uma equipe.
-- Uma votação possui um único voteId, criado e encerrado exclusivamente pelo servidor.
-
-FLUXO
-Lobby → dado animado 5s → resultado → pino anda casa a casa → efeito da casa →
-pergunta 20s → votos aparecem ao vivo no professor → resultado → pódio → próximo turno.
+FLUXO VALIDADO
+1. Professor define 2–10 estúdios e seus nomes.
+2. PREPARAR LOBBY exibe um QR Code geral.
+3. Alunos escaneiam e escolhem o estúdio no celular.
+4. Cada estúdio fica travado para um único controle.
+5. O Game Master pode LIBERAR um controle antes do início em caso de erro/dispositivo trocado.
+6. Com pelo menos 2 controles vinculados, INICIAR GAME JAM é liberado.
+7. ROLAR DADO anima o dado da Central por 5 segundos.
+8. Resultado do dado aparece em tela cheia.
+9. Somente o pino da equipe da jogada avança, casa a casa.
+10. A casa é resolvida automaticamente.
+11. Perguntas ficam abertas por 20 segundos reais, controlados pelo servidor.
+12. O aluno pode alterar o voto durante os 20 segundos.
+13. Cada voto recebido aparece imediatamente como ✓ no painel do professor.
+14. Ao fim dos 20 segundos o servidor fecha a votação; não fecha antecipadamente porque todos votaram.
+15. Resultado aparece em tela cheia, seguido de pódio e próximo turno.
 
 DINÂMICAS
-- 2 a 10 estúdios.
-- Controle por celular sem troca de equipe enquanto conectado.
-- Alteração de voto durante os 20s.
-- Painel do professor mostra todos os votantes e marca ✓ quando o servidor recebe.
-- Desafios coletivos.
-- Battle: apenas duas equipes; acertou +2 XP e fica liberado; errou -1 XP e recebe Crunch.
-- Crunch: equipe perde o próximo turno e é desbloqueada automaticamente com tela de comunicação.
+- Desafio coletivo: equipes não bloqueadas respondem; acertos dão +1 XP.
+- Game Jam Battle: duas equipes respondem. Acerto = +2 XP e liberado. Erro = -1 XP + Crunch.
+- Crunch: no próximo turno, a equipe perde a jogada e é desbloqueada automaticamente com aviso em tela.
 - Power-up: +1 XP.
 - Revés: volta 1 casa.
-- Dado 1–6 com animação de 5s.
-- Movimento visual passo a passo.
-- Resultado em tela cheia.
-- Pódio após respostas.
-- Fases: Conceito, Gameplay, Playtest e Pitch.
+- Pitch Day: ao chegar à casa 30, o estúdio enfrenta 5 perguntas e precisa acertar pelo menos 3.
+- Se falhar no Pitch Day, volta 3 casas e os demais continuam tendo chance de chegar.
+- Se conseguir 3/5, conquista o Greenlight e encerra a partida.
+- Pódio 1º/2º/3º.
 - Reiniciar encerra a sessão e cria um jogo novo.
-- /healthz para diagnóstico.
+- Trace disponível no professor e no aluno pelo ícone ⌁.
+- /healthz mostra estado real do servidor para diagnóstico.
 
 CONTEÚDO
-As perguntas foram organizadas a partir do material PAC3 — O que é GDD, que apresenta
-conceito, especificações, gameplay, recompensas, vitória/derrota, personagens, controles,
-câmera, universo, interface e cronograma.
+As perguntas estão organizadas em quatro fases: CONCEITO, GAMEPLAY, PLAYTEST e PITCH,
+a partir do material de GDD utilizado no PAC III: conceito, regras, público, gameplay,
+recompensas, controles, câmera, HUD, playtest, iteração, pitch e cronograma.
 
 RENDER
 Root Directory: pac3_gamejam
 Build Command: npm install
 Start Command: npm start
 Node: 20–24
+
+IMPORTANTE
+Não há dependências NPM de runtime. O npm install apenas prepara o projeto; o jogo funciona
+com Node.js nativo. Isso elimina a cadeia Socket.IO que vinha causando perda de eventos.

@@ -1,9 +1,0 @@
-GAME JAM GREENLIGHT v4.0 — TESTES
-Reconstrução limpa, sem código de votação das versões 2.x/3.x.
-
-20/20 smoke tests PASS.
-PASS sintaxe server.js.
-PASS sintaxe JavaScript professor.html.
-PASS sintaxe JavaScript aluno.html.
-
-Observação: npm install não pôde ser validado neste ambiente porque a instalação de dependências excedeu o limite de execução/rede. O package.json usa Express 5.1 e Socket.IO 4.8 e deve ser instalado normalmente pelo Render com npm install.
