@@ -1,0 +1,11 @@
+PASS — server
+PASS — professor
+PASS — aluno
+PASS — QR library included
+PASS — single general QR
+PASS — QR close button
+PASS — live connected count
+PASS — broken literal removed
+PASS — student team choice preserved
+PASS — team lock server preserved
+PASS — start after >=2 controls
