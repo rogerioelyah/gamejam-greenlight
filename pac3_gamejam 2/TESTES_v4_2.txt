@@ -1,0 +1,38 @@
+GAME JAM GREENLIGHT v4.2.0 — VALIDAÇÃO ANTES DA ENTREGA
+
+VALIDAÇÃO DE REDE / FLUXO INTEGRADO
+15/15 cenários PASS:
+- servidor inicia sem dependências NPM
+- professor.html servido
+- aluno.html servido
+- QR Code SVG gerado localmente
+- configuração e nomes de estúdios
+- bloqueio de equipe para segundo controle
+- liberação de controle pelo Game Master antes do início
+- início com controles conectados
+- dado + movimento + aterrissagem em Battle
+- votos registrados e alteráveis
+- Battle: vencedor +2 e liberado; perdedor -1 + Crunch; desbloqueio automático no turno
+- Power-up +1 XP
+- Revés volta 1 casa
+- Pitch Day: 5 perguntas, mínimo 3 acertos, vencedor
+- /healthz + reinício de sessão
+
+VALIDAÇÃO DA COMUNICAÇÃO EM TEMPO REAL (SSE)
+5/5 PASS:
+- hello
+- vote:open
+- vote:tick
+- vote:progress com voterIds
+- vote:result
+
+TOTAL: 20 cenários integrados/de entrega PASS.
+
+Os testes usam um servidor HTTP real em localhost, requisições POST reais e um stream SSE real.
+Os tempos são reduzidos somente nos testes via variáveis de ambiente. Em produção:
+- dado: 5000 ms
+- resultado do dado: 1800 ms
+- passo do pino: 700 ms
+- votação: 20000 ms
+- resultado: 4200 ms
+- pódio: 2300 ms
