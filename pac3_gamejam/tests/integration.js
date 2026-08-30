@@ -14,7 +14,9 @@ async function waitFor(fn,timeout=4000,label='condition'){const end=Date.now()+t
  try{
   await waitFor(async()=>{try{return (await jsonGet('/healthz')).ok}catch{return false}},2500,'server');
   console.log('PASS server starts without npm dependencies');
-  let x=await get('/professor.html');assert(x.r.status===200&&x.t.includes('v4.2.0-playable'),'professor page');console.log('PASS professor page');
+  let x=await get('/professor.html');assert(x.r.status===200&&x.t.includes('v4.2.1-podium-fix'),'professor page');console.log('PASS professor page');
+  assert(x.t.includes("if(s.phase==='TURN')hide()"),'TURN must close stale overlay');console.log('PASS TURN closes podium/notice/result overlay');
+  assert(x.t.includes('FECHAR PÓDIO'),'podium manual escape');console.log('PASS podium has manual escape');
   x=await get('/aluno.html');assert(x.r.status===200&&x.t.includes('Voto'),'student page');console.log('PASS student page');
   x=await get('/qr.svg?text='+encodeURIComponent(BASE+'/aluno.html'));assert(x.r.status===200&&x.t.includes('<svg'),'qr');console.log('PASS QR generated locally');
   let r=await post('/api/setup',{count:3,names:['Alpha','Beta','Gamma']});assert(r.ok&&r.state.teams[0].name==='Alpha','setup');console.log('PASS setup names');
@@ -39,8 +41,8 @@ async function waitFor(fn,timeout=4000,label='condition'){const end=Date.now()+t
     const pv=st.vote;await post('/api/vote',{voteId:pv.id,teamId:'T1',controlId:'C1',choice:pv.question.correct});
   }
   st=await waitFor(async()=>{const s=await jsonGet('/api/state');return s.winnerId==='T1'?s:null},2500,'final winner');assert(st.pitch.hits>=3,'3/5');console.log('PASS Pitch Day 5 questions / minimum 3 / winner');
-  const hz=await jsonGet('/healthz');assert(hz.version==='4.2.0-playable'&&hz.winnerId==='T1','health');console.log('PASS health/diagnostic state');
+  const hz=await jsonGet('/healthz');assert(hz.version==='4.2.1-podium-fix'&&hz.winnerId==='T1','health');console.log('PASS health/diagnostic state');
   r=await post('/api/reset');assert(r.ok&&!r.state.started&&r.state.teams.length===0,'reset');console.log('PASS reset creates fresh game');
-  console.log('TOTAL 15/15 INTEGRATION SCENARIOS PASS');
+  console.log('TOTAL 17/17 INTEGRATION SCENARIOS PASS');
  }catch(e){console.error('FAIL',e.stack);console.error(out);process.exitCode=1}finally{child.kill('SIGTERM')}
 })();

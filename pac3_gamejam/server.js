@@ -7,7 +7,7 @@ const QRCode=require('./vendor/QRCode');
 const QRErrorCorrectLevel=require('./vendor/QRCode/QRErrorCorrectLevel');
 
 const PORT=Number(process.env.PORT||3000);
-const VERSION='4.2.0-playable';
+const VERSION='4.2.1-podium-fix';
 const PUBLIC=path.join(__dirname,'public');
 const DUR={
   dice:Number(process.env.DICE_MS||5000),
