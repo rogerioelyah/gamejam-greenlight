@@ -1,6 +1,6 @@
 {
   "name": "gamejam-greenlight-v4",
-  "version": "4.2.1",
+  "version": "4.2.2",
   "private": true,
   "scripts": {
     "start": "node server.js",

@@ -14,9 +14,10 @@ async function waitFor(fn,timeout=4000,label='condition'){const end=Date.now()+t
  try{
   await waitFor(async()=>{try{return (await jsonGet('/healthz')).ok}catch{return false}},2500,'server');
   console.log('PASS server starts without npm dependencies');
-  let x=await get('/professor.html');assert(x.r.status===200&&x.t.includes('v4.2.1-podium-fix'),'professor page');console.log('PASS professor page');
+  let x=await get('/professor.html');assert(x.r.status===200&&x.t.includes('v4.2.2-rules-validated'),'professor page');console.log('PASS professor page');
   assert(x.t.includes("if(s.phase==='TURN')hide()"),'TURN must close stale overlay');console.log('PASS TURN closes podium/notice/result overlay');
   assert(x.t.includes('FECHAR PÓDIO'),'podium manual escape');console.log('PASS podium has manual escape');
+  assert(x.t.includes('INICIAR NOVO JOGO')&&x.t.includes('resetGame()'),'final reset button');console.log('PASS final screen has restart button');
   x=await get('/aluno.html');assert(x.r.status===200&&x.t.includes('Voto'),'student page');console.log('PASS student page');
   x=await get('/qr.svg?text='+encodeURIComponent(BASE+'/aluno.html'));assert(x.r.status===200&&x.t.includes('<svg'),'qr');console.log('PASS QR generated locally');
   let r=await post('/api/setup',{count:3,names:['Alpha','Beta','Gamma']});assert(r.ok&&r.state.teams[0].name==='Alpha','setup');console.log('PASS setup names');
@@ -25,11 +26,34 @@ async function waitFor(fn,timeout=4000,label='condition'){const end=Date.now()+t
   assert((await post('/api/unlock',{teamId:'T3'})).ok,'unlock');assert((await post('/api/join',{teamId:'T3',controlId:'C3'})).ok,'rejoin after unlock');console.log('PASS Game Master can release a control before start');
   assert((await post('/api/start')).ok,'start');console.log('PASS start with connected controls');
   assert((await post('/api/roll')).ok,'roll');
-  let st=await waitFor(async()=>{const s=await jsonGet('/api/state');return s.vote&&s.vote.open?s:null},1800,'battle vote');assert(st.vote.kind==='battle','battle expected');assert(st.teams[0].pos===6,'dice moved stepwise to 6');console.log('PASS dice + movement + Battle landing');
+  let st=await waitFor(async()=>{const s=await jsonGet('/api/state');return s.vote&&s.vote.open?s:null},1800,'battle vote');assert(st.vote.kind==='battle','battle expected');assert(st.vote.eligible.length===2&&st.vote.eligible.includes('T1')&&st.vote.eligible.includes('T2')&&!st.vote.eligible.includes('T3'),'battle must have exactly 2 teams');console.log('PASS Battle has exactly 2 teams');assert(st.teams[0].pos===6,'dice moved stepwise to 6');console.log('PASS dice + movement + Battle landing');
   const v=st.vote,correct=v.question.correct,wrong=(correct+1)%v.question.options.length;
   r=await post('/api/vote',{voteId:v.id,teamId:'T1',controlId:'C1',choice:wrong});assert(r.ok,'vote wrong first');r=await post('/api/vote',{voteId:v.id,teamId:'T1',controlId:'C1',choice:correct});assert(r.ok,'change vote');r=await post('/api/vote',{voteId:v.id,teamId:'T2',controlId:'C2',choice:wrong});assert(r.ok,'vote2');
   st=await jsonGet('/api/state');assert(st.vote.responses.T1===correct&&st.vote.responses.T2===wrong,'vote replace/record');console.log('PASS votes recorded and changeable');
   await waitFor(async()=>{const s=await jsonGet('/api/state');return s.phase==='TURN'&&s.turn===2?s:null},2000,'post battle/crunch');st=await jsonGet('/api/state');assert(st.teams[0].xp===2,'winner +2');assert(st.teams[1].xp===0&&!st.teams[1].blocked,'loser crunch consumed next turn');console.log('PASS Battle scoring + loser-only Crunch + auto unlock');
+  // Seven different questions for the same team in the same phase.
+  await post('/api/test/set',{turn:2,teamId:'T3',pos:1,phase:'TURN',started:true});
+  const seenConcept=new Set();
+  for(let i=0;i<7;i++){
+    let qv=await post('/api/test/open-vote',{kind:'collective',actorId:'T3',duration:10000});
+    assert(qv.ok&&qv.vote?.question?.id,'test open collective');
+    seenConcept.add(qv.vote.question.id);
+    await post('/api/test/set',{turn:2,teamId:'T3',pos:1,phase:'TURN',started:true});
+  }
+  assert(seenConcept.size===7,'first seven questions for a team/phase must be unique');
+  console.log('PASS 7 unique questions per team/phase before repeat');
+
+  // Pitch: only the arriving team answers, and its 5 questions are distinct.
+  const seenPitch=new Set();
+  for(let i=1;i<=5;i++){
+    let qv=await post('/api/test/open-vote',{kind:'pitch-final',actorId:'T3',duration:10000,pitchStep:i});
+    assert(qv.ok&&qv.vote.eligible.length===1&&qv.vote.eligible[0]==='T3','pitch only arriving team eligible');
+    seenPitch.add(qv.vote.question.id);
+    await post('/api/test/set',{turn:2,teamId:'T3',pos:25,phase:'TURN',started:true});
+  }
+  assert(seenPitch.size===5,'pitch five questions must be unique');
+  console.log('PASS Pitch has 5 unique questions and only arriving team answers');
+
   // bonus cell: Gamma at 7, dice=1 -> 8
   await post('/api/test/set',{turn:2,teamId:'T3',pos:7,phase:'TURN',started:true});await post('/api/roll');await waitFor(async()=>{const s=await jsonGet('/api/state');return s.teams[2].xp===1?s:null},1200,'bonus');console.log('PASS bonus +1 XP');
   // setback: Alpha at 9, dice=1 -> 10 then back to 9
@@ -38,11 +62,11 @@ async function waitFor(fn,timeout=4000,label='condition'){const end=Date.now()+t
   await post('/api/test/set',{turn:0,teamId:'T1',pos:29,phase:'TURN',started:true});await post('/api/roll');
   for(let i=1;i<=5;i++){
     st=await waitFor(async()=>{const s=await jsonGet('/api/state');return s.vote?.open&&s.vote.kind==='pitch-final'&&s.vote.pitchStep===i?s:null},1600,'pitch '+i);
-    const pv=st.vote;await post('/api/vote',{voteId:pv.id,teamId:'T1',controlId:'C1',choice:pv.question.correct});
+    const pv=st.vote;assert(pv.eligible.length===1&&pv.eligible[0]==='T1','only finalist may answer pitch');await post('/api/vote',{voteId:pv.id,teamId:'T1',controlId:'C1',choice:pv.question.correct});
   }
   st=await waitFor(async()=>{const s=await jsonGet('/api/state');return s.winnerId==='T1'?s:null},2500,'final winner');assert(st.pitch.hits>=3,'3/5');console.log('PASS Pitch Day 5 questions / minimum 3 / winner');
-  const hz=await jsonGet('/healthz');assert(hz.version==='4.2.1-podium-fix'&&hz.winnerId==='T1','health');console.log('PASS health/diagnostic state');
+  const hz=await jsonGet('/healthz');assert(hz.version==='4.2.2-rules-validated'&&hz.winnerId==='T1','health');console.log('PASS health/diagnostic state');
   r=await post('/api/reset');assert(r.ok&&!r.state.started&&r.state.teams.length===0,'reset');console.log('PASS reset creates fresh game');
-  console.log('TOTAL 17/17 INTEGRATION SCENARIOS PASS');
+  console.log('TOTAL 22/22 INTEGRATION SCENARIOS PASS');
  }catch(e){console.error('FAIL',e.stack);console.error(out);process.exitCode=1}finally{child.kill('SIGTERM')}
 })();
