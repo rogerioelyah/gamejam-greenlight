@@ -14,11 +14,13 @@ async function waitFor(fn,timeout=4000,label='condition'){const end=Date.now()+t
  try{
   await waitFor(async()=>{try{return (await jsonGet('/healthz')).ok}catch{return false}},2500,'server');
   console.log('PASS server starts without npm dependencies');
-  let x=await get('/professor.html');assert(x.r.status===200&&x.t.includes('v4.2.6-global-question-bank'),'professor page');console.log('PASS professor page');
+  let x=await get('/professor.html');assert(x.r.status===200&&x.t.includes('v4.2.7-blocked-control'),'professor page');console.log('PASS professor page');
   assert(x.t.includes("if(s.phase==='TURN')hide()"),'TURN must close stale overlay');console.log('PASS TURN closes podium/notice/result overlay');
   assert(x.t.includes('FECHAR PÓDIO'),'podium manual escape');console.log('PASS podium has manual escape');
   assert(x.t.includes('INICIAR NOVO JOGO')&&x.t.includes('resetGame()'),'final reset button');console.log('PASS final screen has restart button');
   x=await get('/aluno.html');assert(x.r.status===200&&x.t.includes('Voto'),'student page');console.log('PASS student page');
+  assert(x.t.includes('CRUNCH ATIVO')&&x.t.includes('renderBlockedControl()'),'blocked client UI');console.log('PASS blocked control hides dice and answers');
+  assert(x.t.includes('if(renderBlockedControl()||!vote?.open)return'),'blocked vote client guard');console.log('PASS blocked client cannot submit vote');
   assert(x.t.includes("localStorage.setItem('gamejam_team'")&&x.t.includes("localStorage.setItem('gamejam_session'"),'session-scoped reconnect binding');console.log('PASS same-session control binding is persisted for reconnect');
   assert(x.t.includes('incoming.sessionId!==sessionSeen')&&x.t.includes("localStorage.removeItem('gamejam_team')"),'new session clears old team binding');console.log('PASS new game/session invalidates previous team binding');
   assert(x.t.includes('🎲 ROLAR DADO')&&x.t.includes("api('/api/roll',{teamId:me,controlId})"),'student dice control');console.log('PASS active team rolls dice from cellphone');
@@ -33,8 +35,13 @@ async function waitFor(fn,timeout=4000,label='condition'){const end=Date.now()+t
   r=await post('/api/join',{teamId:'T1',controlId:'OTHER'});assert(r.status===409,'team lock');console.log('PASS team lock');
   assert((await post('/api/unlock',{teamId:'T3'})).ok,'unlock');assert((await post('/api/join',{teamId:'T3',controlId:'C3'})).ok,'rejoin after unlock');console.log('PASS Game Master can release a control before start');
   assert((await post('/api/start')).ok,'start');console.log('PASS start with connected controls');
+  await post('/api/test/set',{turn:0,teamId:'T1',pos:1,phase:'TURN',started:true,blocked:true});
+  let blockedRoll=await post('/api/roll',{teamId:'T1',controlId:'C1'});assert(blockedRoll.status===409,'blocked team roll rejected');console.log('PASS blocked team cannot roll on server');
+  await post('/api/test/set',{turn:0,teamId:'T1',pos:1,phase:'TURN',started:true,blocked:false});
+
   let denied=await post('/api/roll',{teamId:'T2',controlId:'C2'});assert(denied.status===403,'wrong team cannot roll');console.log('PASS non-active team cannot roll dice');
   denied=await post('/api/roll',{teamId:'T1',controlId:'WRONG'});assert(denied.status===403,'wrong control cannot roll');console.log('PASS unbound control cannot roll dice');
+  let sv=await get('/server.js').catch(()=>null);
 
   assert((await post('/api/roll',{teamId:'T1',controlId:'C1'})).ok,'roll');
   let st=await waitFor(async()=>{const s=await jsonGet('/api/state');return s.vote&&s.vote.open?s:null},1800,'battle vote');assert(st.vote.kind==='battle','battle expected');assert(st.vote.eligible.length===2&&st.vote.eligible.includes('T1')&&st.vote.eligible.includes('T2')&&!st.vote.eligible.includes('T3'),'battle must have exactly 2 teams');console.log('PASS Battle has exactly 2 teams');assert(st.teams[0].pos===6,'dice moved stepwise to 6');console.log('PASS dice + movement + Battle landing');
@@ -79,8 +86,8 @@ async function waitFor(fn,timeout=4000,label='condition'){const end=Date.now()+t
     const pv=st.vote;assert(pv.eligible.length===1&&pv.eligible[0]==='T1','only finalist may answer pitch');await post('/api/vote',{voteId:pv.id,teamId:'T1',controlId:'C1',choice:pv.question.correct});
   }
   st=await waitFor(async()=>{const s=await jsonGet('/api/state');return s.winnerId==='T1'?s:null},2500,'final winner');assert(st.pitch.hits>=3,'3/5');console.log('PASS Pitch Day 5 questions / minimum 3 / winner');
-  const hz=await jsonGet('/healthz');assert(hz.version==='4.2.6-global-question-bank'&&hz.winnerId==='T1','health');console.log('PASS health/diagnostic state');
+  const hz=await jsonGet('/healthz');assert(hz.version==='4.2.7-blocked-control'&&hz.winnerId==='T1','health');console.log('PASS health/diagnostic state');
   r=await post('/api/reset');assert(r.ok&&!r.state.started&&r.state.teams.length===0,'reset');console.log('PASS reset creates fresh game');
-  console.log('TOTAL 31/31 INTEGRATION SCENARIOS PASS');
+  console.log('TOTAL 35/35 INTEGRATION SCENARIOS PASS');
  }catch(e){console.error('FAIL',e.stack);console.error(out);process.exitCode=1}finally{child.kill('SIGTERM')}
 })();

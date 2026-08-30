@@ -7,7 +7,7 @@ const QRCode=require('./vendor/QRCode');
 const QRErrorCorrectLevel=require('./vendor/QRCode/QRErrorCorrectLevel');
 
 const PORT=Number(process.env.PORT||3000);
-const VERSION='4.2.6-global-question-bank';
+const VERSION='4.2.7-blocked-control';
 const PUBLIC=path.join(__dirname,'public');
 const DUR={
   dice:Number(process.env.DICE_MS||5000),
@@ -24,7 +24,7 @@ const PHASES=['CONCEITO','GAMEPLAY','PLAYTEST','PITCH'];
 const CELL_TYPES=['challenge','bonus','challenge','setback','challenge','battle','challenge','bonus','challenge','setback','challenge','battle','challenge','bonus','challenge','setback','challenge','battle','challenge','bonus','challenge','setback','challenge','battle','challenge','bonus','challenge','setback','challenge','final'];
 const QUESTIONS=require('./questions.json');
 
-function fresh(){return {version:VERSION,sessionId:`S-${Date.now()}-${Math.random().toString(36).slice(2,7)}`,started:false,phase:'LOBBY',turn:0,round:1,teams:[],vote:null,lastResult:null,pitch:null,winnerId:null,usedQuestionIds:[],log:[]}}
+function fresh(){return {version:VERSION,sessionId:`S-${Date.now()}-${Math.random().toString(36).slice(2,7)}`,started:false,phase:'LOBBY',turn:0,round:1,teams:[],vote:null,lastResult:null,pitch:null,winnerId:null,usedQuestionIds:[],usedQuestionKeys:[],log:[]}}
 let G=fresh();
 const streams=new Set();
 let timers=new Set();
@@ -42,16 +42,20 @@ function broadcast(event,data){for(const res of [...streams]){try{sse(res,event,
 function emitState(){broadcast('state',publicState())}
 function json(res,status,obj){res.writeHead(status,{'Content-Type':'application/json; charset=utf-8','Cache-Control':'no-store'});res.end(JSON.stringify(obj))}
 function body(req){return new Promise((resolve,reject)=>{let s='';req.on('data',c=>{s+=c;if(s.length>1e6)req.destroy()});req.on('end',()=>{try{resolve(s?JSON.parse(s):{})}catch(e){reject(e)}});req.on('error',reject)})}
+function questionKey(text){return String(text||'').normalize('NFD').replace(/[\u0300-\u036f]/g,'').toLowerCase().replace(/[^a-z0-9]+/g,' ').trim()}
 function shuffleQuestion(phase,actorId,scope=phase){
  let bank='regular';
  if(scope==='BATTLE')bank='battle';
  if(scope==='PITCH_FINAL')bank='pitch-final';
  let pool=QUESTIONS.filter(q=>q.bank===bank&&(bank!=='regular'||q.phase===phase));
- const used=new Set(G.usedQuestionIds||[]);
- const available=pool.filter(q=>!used.has(q.id));
+ const usedIds=new Set(G.usedQuestionIds||[]);
+ const usedKeys=new Set(G.usedQuestionKeys||[]);
+ const available=pool.filter(q=>!usedIds.has(q.id)&&!usedKeys.has(questionKey(q.text)));
  if(!available.length)throw new Error(`Banco de questões esgotado para ${bank}${bank==='regular'?`/${phase}`:''}. Reinicie a partida para reutilizar questões.`);
  const raw=available[Math.floor(Math.random()*available.length)];
- G.usedQuestionIds.push(raw.id);
+ const key=questionKey(raw.text);
+ G.usedQuestionIds.push(raw.id);G.usedQuestionKeys.push(key);
+ log('question:used',{id:raw.id,bank,phase,key,usedTotal:G.usedQuestionIds.length});
  const pairs=raw.options.map((text,i)=>({text,correct:i===raw.correct}));
  for(let i=pairs.length-1;i>0;i--){const j=Math.floor(Math.random()*(i+1));[pairs[i],pairs[j]]=[pairs[j],pairs[i]]}
  return {id:raw.id,phase:raw.phase,text:raw.text,options:pairs.map(x=>x.text),correct:pairs.findIndex(x=>x.correct),why:raw.why};
@@ -59,7 +63,16 @@ function shuffleQuestion(phase,actorId,scope=phase){
 function nextDice(){if(FIXED_DICE.length)return FIXED_DICE[fixedDiceIndex++%FIXED_DICE.length];return 1+Math.floor(Math.random()*6)}
 function podiumPayload(){return [...G.teams].sort((a,b)=>b.xp-a.xp||b.pos-a.pos).slice(0,3).map(visibleTeam)}
 function showPodiumThenNext(){G.phase='PODIUM';emitState();broadcast('podium',{teams:podiumPayload()});later(()=>{if(G.winnerId){G.phase='GAMEOVER';emitState();return}nextTurn()},DUR.podium)}
-function nextTurn(){if(!G.started||G.winnerId)return;if(G.vote?.open)return;G.turn=(G.turn+1)%G.teams.length;if(G.turn===0)G.round++;const t=G.teams[G.turn];if(!t)return;if(t.blocked){t.blocked=false;G.phase='NOTICE';emitState();broadcast('notice',{title:'🔓 CRUNCH CONSUMIDO',body:`${t.name} perde este turno e está desbloqueado.`,teamId:t.id});later(nextTurn,DUR.notice);return}G.phase='TURN';emitState()}
+function nextTurn(){if(!G.started||G.winnerId)return;if(G.vote?.open)return;G.turn=(G.turn+1)%G.teams.length;if(G.turn===0)G.round++;const t=G.teams[G.turn];if(!t)return;if(t.blocked){
+ G.phase='NOTICE';emitState();
+ broadcast('notice',{title:'💥 CRUNCH',body:`${t.name} perde este turno. O bloqueio será consumido agora.`,teamId:t.id});
+ later(()=>{
+   t.blocked=false;emitState();
+   broadcast('notice',{title:'🔓 EQUIPE DESBLOQUEADA',body:`${t.name} está desbloqueado e volta a participar a partir da próxima oportunidade.`,teamId:t.id});
+   later(nextTurn,Math.min(900,DUR.notice));
+ },DUR.notice);
+ return
+}G.phase='TURN';emitState()}
 function resultRows(v){const results={};for(const id of v.eligible){const c=v.responses[id];results[id]={answered:Number.isInteger(c),choice:Number.isInteger(c)?c:null,correct:c===v.question.correct}}return results}
 function applyStandardResult(payload){const actor=team(payload.actorId);if(!actor)return;if(payload.kind==='battle'){
  const opp=team(payload.opponentId),ar=payload.results[actor.id],br=opp&&payload.results[opp.id];
@@ -98,12 +111,12 @@ function land(actor){actor.phase=phaseForPos(actor.pos);const type=CELL_TYPES[(a
  },DUR.notice);
  return
 }if(type==='battle'){const opp=G.teams.filter(t=>t.id!==actor.id&&!t.blocked).sort((a,b)=>a.xp-b.xp||a.pos-b.pos)[0];if(opp){openVote({kind:'battle',actorId:actor.id,opponentId:opp.id});return}}openVote({actorId:actor.id})}
-function roll(){if(!G.started||G.phase!=='TURN'||G.vote?.open||G.winnerId)return false;const actor=G.teams[G.turn];if(!actor)return false;const value=nextDice(),from=actor.pos,target=Math.min(30,from+value);G.phase='DICE';log('dice',{teamId:actor.id,value,from,target});emitState();broadcast('dice:rolling',{teamId:actor.id,duration:DUR.dice});later(()=>{broadcast('dice:result',{teamId:actor.id,value,from,target,duration:DUR.diceResult});later(()=>{G.phase='MOVE';emitState();let p=from;const moveOne=()=>{if(p>=target){later(()=>land(actor),500);return}p++;actor.pos=p;actor.phase=phaseForPos(p);emitState();broadcast('move:step',{teamId:actor.id,pos:p,target});later(moveOne,DUR.move)};moveOne()},DUR.diceResult)},DUR.dice);return true}
+function roll(){if(!G.started||G.phase!=='TURN'||G.vote?.open||G.winnerId)return false;const actor=G.teams[G.turn];if(!actor||actor.blocked)return false;const value=nextDice(),from=actor.pos,target=Math.min(30,from+value);G.phase='DICE';log('dice',{teamId:actor.id,value,from,target});emitState();broadcast('dice:rolling',{teamId:actor.id,duration:DUR.dice});later(()=>{broadcast('dice:result',{teamId:actor.id,value,from,target,duration:DUR.diceResult});later(()=>{G.phase='MOVE';emitState();let p=from;const moveOne=()=>{if(p>=target){later(()=>land(actor),500);return}p++;actor.pos=p;actor.phase=phaseForPos(p);emitState();broadcast('move:step',{teamId:actor.id,pos:p,target});later(moveOne,DUR.move)};moveOne()},DUR.diceResult)},DUR.dice);return true}
 function reset(){clearAllTimers();G=fresh();fixedDiceIndex=0;broadcast('reset',{version:VERSION});emitState()}
 function qrSvg(text){const qr=new QRCode(-1,QRErrorCorrectLevel.M);qr.addData(text);qr.make();const n=qr.getModuleCount(),m=4,size=n+2*m;let d='';for(let r=0;r<n;r++)for(let c=0;c<n;c++)if(qr.isDark(r,c))d+=`M${c+m} ${r+m}h1v1h-1z`;return `<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 ${size} ${size}" shape-rendering="crispEdges"><rect width="100%" height="100%" fill="white"/><path d="${d}" fill="black"/></svg>`}
 function serveStatic(req,res,url){let rel=url.pathname==='/'?'professor.html':url.pathname.replace(/^\//,'');const file=path.normalize(path.join(PUBLIC,rel));if(!file.startsWith(PUBLIC))return json(res,403,{error:'forbidden'});if(!fs.existsSync(file)||fs.statSync(file).isDirectory())return false;const ext=path.extname(file),ct={'.html':'text/html; charset=utf-8','.js':'application/javascript; charset=utf-8','.css':'text/css; charset=utf-8','.svg':'image/svg+xml'}[ext]||'application/octet-stream';res.writeHead(200,{'Content-Type':ct,'Cache-Control':'no-store'});fs.createReadStream(file).pipe(res);return true}
 async function api(req,res,url){if(req.method==='GET'&&url.pathname==='/api/state')return json(res,200,publicState());if(req.method==='GET'&&url.pathname==='/api/trace')return json(res,200,{version:VERSION,state:publicState(),log:G.log.slice(-300)});if(req.method==='GET'&&url.pathname==='/healthz')return json(res,200,{ok:true,version:VERSION,phase:G.phase,started:G.started,teams:G.teams.map(t=>({id:t.id,joined:!!t.controlId,pos:t.pos,xp:t.xp,blocked:t.blocked})),vote:G.vote?{id:G.vote.id,open:G.vote.open,eligible:G.vote.eligible,voters:Object.keys(G.vote.responses),endsAt:G.vote.endsAt}:null,lastResult:G.lastResult?{voteId:G.lastResult.voteId,kind:G.lastResult.kind}:null,pitch:G.pitch,winnerId:G.winnerId});if(req.method==='GET'&&url.pathname==='/events'){res.writeHead(200,{'Content-Type':'text/event-stream','Cache-Control':'no-store','Connection':'keep-alive'});res.write(': connected\n\n');streams.add(res);sse(res,'hello',{version:VERSION,state:publicState()});req.on('close',()=>streams.delete(res));return true}if(req.method==='GET'&&url.pathname==='/qr.svg'){const text=url.searchParams.get('text')||'';res.writeHead(200,{'Content-Type':'image/svg+xml','Cache-Control':'no-store'});res.end(qrSvg(text));return true}if(req.method!=='POST')return false;let d={};try{d=await body(req)}catch{return json(res,400,{ok:false,error:'JSON inválido'})}
- if(process.env.NODE_ENV==='test'&&url.pathname==='/api/test/question'){try{const phase=String(d.phase||'CONCEITO'),scope=String(d.scope||phase);const q=shuffleQuestion(phase,'TEST',scope);return json(res,200,{ok:true,question:q,used:G.usedQuestionIds.length})}catch(e){return json(res,409,{ok:false,error:e.message})}}
+ if(process.env.NODE_ENV==='test'&&url.pathname==='/api/test/question'){try{const phase=String(d.phase||'CONCEITO'),scope=String(d.scope||phase);const q=shuffleQuestion(phase,'TEST',scope);return json(res,200,{ok:true,question:q,used:G.usedQuestionIds.length,usedKeys:G.usedQuestionKeys.length})}catch(e){return json(res,409,{ok:false,error:e.message})}}
  if(process.env.NODE_ENV==='test'&&url.pathname==='/api/test/open-vote'){
    if(G.vote?.open){G.vote=null}
    const actorId=String(d.actorId||'T1'),kind=String(d.kind||'collective'),opponentId=d.opponentId?String(d.opponentId):null;
@@ -125,7 +138,7 @@ async function api(req,res,url){if(req.method==='GET'&&url.pathname==='/api/stat
  }
  if(url.pathname==='/api/join'){const t=team(String(d.teamId||'')),cid=String(d.controlId||'');if(!t||!cid)return json(res,400,{ok:false,error:'Equipe/controle inválido.'});if(t.controlId&&t.controlId!==cid)return json(res,409,{ok:false,error:'Esta equipe já possui um controle vinculado.'});t.controlId=cid;t.lastSeen=Date.now();log('join',{teamId:t.id,controlId:cid});emitState();return json(res,200,{ok:true,team:visibleTeam(t),state:publicState()})}
  if(url.pathname==='/api/ping'){const t=team(String(d.teamId||''));if(t&&t.controlId===String(d.controlId||''))t.lastSeen=Date.now();return json(res,200,{ok:true})}
- if(url.pathname==='/api/vote'){const v=G.vote,t=team(String(d.teamId||'')),cid=String(d.controlId||'');if(!v?.open)return json(res,409,{ok:false,error:'Não há votação ativa.'});if(!t||t.controlId!==cid)return json(res,403,{ok:false,error:'Controle não vinculado a esta equipe.'});if(String(d.voteId)!==v.id)return json(res,409,{ok:false,error:'Votação desatualizada.'});if(!v.eligible.includes(t.id))return json(res,403,{ok:false,error:'Sua equipe não participa desta votação.'});const choice=Number(d.choice);if(!Number.isInteger(choice)||choice<0||choice>=v.question.options.length)return json(res,400,{ok:false,error:'Alternativa inválida.'});v.responses[t.id]=choice;log('vote',{voteId:v.id,teamId:t.id,choice});broadcast('vote:progress',{voteId:v.id,voterIds:Object.keys(v.responses),count:Object.keys(v.responses).length,total:v.eligible.length});emitState();return json(res,200,{ok:true,choice,count:Object.keys(v.responses).length,total:v.eligible.length})}
+ if(url.pathname==='/api/vote'){const v=G.vote,t=team(String(d.teamId||'')),cid=String(d.controlId||'');if(!v?.open)return json(res,409,{ok:false,error:'Não há votação ativa.'});if(!t||t.controlId!==cid)return json(res,403,{ok:false,error:'Controle não vinculado a esta equipe.'});if(String(d.voteId)!==v.id)return json(res,409,{ok:false,error:'Votação desatualizada.'});if(t.blocked)return json(res,403,{ok:false,error:'Equipe em Crunch não pode votar.'});if(!v.eligible.includes(t.id))return json(res,403,{ok:false,error:'Sua equipe não participa desta votação.'});const choice=Number(d.choice);if(!Number.isInteger(choice)||choice<0||choice>=v.question.options.length)return json(res,400,{ok:false,error:'Alternativa inválida.'});v.responses[t.id]=choice;log('vote',{voteId:v.id,teamId:t.id,choice});broadcast('vote:progress',{voteId:v.id,voterIds:Object.keys(v.responses),count:Object.keys(v.responses).length,total:v.eligible.length});emitState();return json(res,200,{ok:true,choice,count:Object.keys(v.responses).length,total:v.eligible.length})}
  return false}
 const server=http.createServer(async(req,res)=>{const url=new URL(req.url,`http://${req.headers.host||'localhost'}`);try{const done=await api(req,res,url);if(done!==false)return;if(serveStatic(req,res,url))return;json(res,404,{error:'not found'})}catch(e){console.error(e);json(res,500,{ok:false,error:e.message})}});
 server.listen(PORT,()=>console.log(`Game Jam ${VERSION} listening on ${PORT}`));
