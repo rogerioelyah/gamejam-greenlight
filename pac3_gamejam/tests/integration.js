@@ -14,7 +14,7 @@ async function waitFor(fn,timeout=4000,label='condition'){const end=Date.now()+t
  try{
   await waitFor(async()=>{try{return (await jsonGet('/healthz')).ok}catch{return false}},2500,'server');
   console.log('PASS server starts without npm dependencies');
-  let x=await get('/professor.html');assert(x.r.status===200&&x.t.includes('v4.2.4-reconnect-dice-control'),'professor page');console.log('PASS professor page');
+  let x=await get('/professor.html');assert(x.r.status===200&&x.t.includes('v4.2.6-global-question-bank'),'professor page');console.log('PASS professor page');
   assert(x.t.includes("if(s.phase==='TURN')hide()"),'TURN must close stale overlay');console.log('PASS TURN closes podium/notice/result overlay');
   assert(x.t.includes('FECHAR PÓDIO'),'podium manual escape');console.log('PASS podium has manual escape');
   assert(x.t.includes('INICIAR NOVO JOGO')&&x.t.includes('resetGame()'),'final reset button');console.log('PASS final screen has restart button');
@@ -68,7 +68,10 @@ async function waitFor(fn,timeout=4000,label='condition'){const end=Date.now()+t
   // bonus cell: Gamma at 7, dice=1 -> 8
   await post('/api/test/set',{turn:2,teamId:'T3',pos:7,phase:'TURN',started:true});await post('/api/roll',{teamId:'T3',controlId:'C3'});await waitFor(async()=>{const s=await jsonGet('/api/state');return s.teams[2].xp===1?s:null},1200,'bonus');console.log('PASS bonus +1 XP');
   // setback: Alpha at 9, dice=1 -> 10 then back to 9
-  await post('/api/test/set',{turn:0,teamId:'T1',pos:9,phase:'TURN',started:true});await post('/api/roll',{teamId:'T1',controlId:'C1'});await waitFor(async()=>{const s=await jsonGet('/api/state');return s.teams[0].pos===9&&s.phase!=='DICE'&&s.phase!=='MOVE'?s:null},1200,'setback');console.log('PASS setback returns 1 house');
+  await post('/api/test/set',{turn:0,teamId:'T1',pos:9,phase:'TURN',started:true});await post('/api/roll',{teamId:'T1',controlId:'C1'});
+  st=await waitFor(async()=>{const s=await jsonGet('/api/state');return s.teams[0].pos===9&&s.vote?.open?s:null},1800,'setback destination resolved');
+  assert(st.vote.actorId==='T1','destination house must open for setback actor before podium');
+  console.log('PASS setback returns 1 house and opens destination before podium');
   // final: Alpha at 29, dice=1 -> 30, answer 5 pitch questions correctly
   await post('/api/test/set',{turn:0,teamId:'T1',pos:29,phase:'TURN',started:true});await post('/api/roll',{teamId:'T1',controlId:'C1'});
   for(let i=1;i<=5;i++){
@@ -76,8 +79,8 @@ async function waitFor(fn,timeout=4000,label='condition'){const end=Date.now()+t
     const pv=st.vote;assert(pv.eligible.length===1&&pv.eligible[0]==='T1','only finalist may answer pitch');await post('/api/vote',{voteId:pv.id,teamId:'T1',controlId:'C1',choice:pv.question.correct});
   }
   st=await waitFor(async()=>{const s=await jsonGet('/api/state');return s.winnerId==='T1'?s:null},2500,'final winner');assert(st.pitch.hits>=3,'3/5');console.log('PASS Pitch Day 5 questions / minimum 3 / winner');
-  const hz=await jsonGet('/healthz');assert(hz.version==='4.2.4-reconnect-dice-control'&&hz.winnerId==='T1','health');console.log('PASS health/diagnostic state');
+  const hz=await jsonGet('/healthz');assert(hz.version==='4.2.6-global-question-bank'&&hz.winnerId==='T1','health');console.log('PASS health/diagnostic state');
   r=await post('/api/reset');assert(r.ok&&!r.state.started&&r.state.teams.length===0,'reset');console.log('PASS reset creates fresh game');
-  console.log('TOTAL 30/30 INTEGRATION SCENARIOS PASS');
+  console.log('TOTAL 31/31 INTEGRATION SCENARIOS PASS');
  }catch(e){console.error('FAIL',e.stack);console.error(out);process.exitCode=1}finally{child.kill('SIGTERM')}
 })();

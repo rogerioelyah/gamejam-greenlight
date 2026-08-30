@@ -1,10 +1,10 @@
 {
   "name": "gamejam-greenlight-v4",
-  "version": "4.2.4",
+  "version": "4.2.6",
   "private": true,
   "scripts": {
     "start": "node server.js",
-    "test": "node tests/integration.js && node tests/sse.js"
+    "test": "node tests/integration.js && node tests/sse.js && node tests/question-bank.js"
   },
   "engines": {
     "node": ">=20 <25"

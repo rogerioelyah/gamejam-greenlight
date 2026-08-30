@@ -1,0 +1,18 @@
+GAME JAM GREENLIGHT v4.2.6 — BANCO GLOBAL SEM REPETIÇÃO
+
+Banco baseado no ebook "Game Design — O processo de criação de um jogo", de Itallo Casimiro.
+
+- 300 questões regulares: 75 CONCEITO + 75 GAMEPLAY + 75 PLAYTEST + 75 PITCH de percurso.
+- 80 questões exclusivas de BATTLE, todas com 4 alternativas (A/B/C/D).
+- 50 questões exclusivas do PITCH FINAL, separadas do percurso.
+- Total: 430 questões com IDs e enunciados únicos.
+- Uma questão usada entra no histórico global da partida e não pode reaparecer para outra equipe.
+- O histórico só é zerado em NOVO JOGO/RESET.
+- Se um banco for esgotado, o servidor recusa repetir silenciosamente.
+- Pitch Final sorteia 5 perguntas do banco exclusivo e somente a equipe finalista responde.
+
+REGRESSÃO
+31/31 cenários de integração PASS
+5/5 eventos SSE PASS
+6/6 cenários específicos do banco PASS
+430/430 IDs e enunciados únicos PASS

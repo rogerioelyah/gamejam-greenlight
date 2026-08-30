@@ -1,0 +1,14 @@
+GAME JAM GREENLIGHT v4.2.5 — REVÉS COM RESOLUÇÃO DA CASA DE DESTINO
+
+Regra corrigida:
+1. Equipe cai no REVÉS.
+2. Aviso de REVÉS é exibido.
+3. Pino retorna uma casa.
+4. A casa de destino é aberta/resolvida.
+5. Se for desafio/batalha/final/bônus, sua dinâmica acontece normalmente.
+6. Somente depois da resolução da nova casa ocorre o pódio/próximo turno.
+
+Validação:
+31/31 cenários de integração PASS
+5/5 SSE PASS
+Inclui regressão: setback returns 1 house and opens destination before podium.

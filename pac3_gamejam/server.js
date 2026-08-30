@@ -7,7 +7,7 @@ const QRCode=require('./vendor/QRCode');
 const QRErrorCorrectLevel=require('./vendor/QRCode/QRErrorCorrectLevel');
 
 const PORT=Number(process.env.PORT||3000);
-const VERSION='4.2.4-reconnect-dice-control';
+const VERSION='4.2.6-global-question-bank';
 const PUBLIC=path.join(__dirname,'public');
 const DUR={
   dice:Number(process.env.DICE_MS||5000),
@@ -22,42 +22,9 @@ const FIXED_DICE=(process.env.TEST_DICE||'').split(',').map(Number).filter(n=>n>
 let fixedDiceIndex=0;
 const PHASES=['CONCEITO','GAMEPLAY','PLAYTEST','PITCH'];
 const CELL_TYPES=['challenge','bonus','challenge','setback','challenge','battle','challenge','bonus','challenge','setback','challenge','battle','challenge','bonus','challenge','setback','challenge','battle','challenge','bonus','challenge','setback','challenge','battle','challenge','bonus','challenge','setback','challenge','final'];
-const QUESTIONS=[
-['CONCEITO','No GDD, qual seção apresenta nome, estilo, público-alvo, história e regras principais?',['Conceito','Câmeras','Sonorização'],0,'O conceito apresenta a visão geral do jogo.'],
-['CONCEITO','Qual função melhor descreve um Game Design Document?',['Substituir o código-fonte','Descrever os aspectos do jogo e orientar o projeto','Registrar apenas bugs'],1,'O GDD funciona como espinha dorsal do projeto.'],
-['CONCEITO','Qual elemento pertence às especificações do jogo?',['Sistema de pontuação e ranking','Somente logotipo','Somente linguagem de programação'],0,'Pontuação, ranking, fases e jogadores integram as especificações.'],
-['CONCEITO','No planejamento de um jogo, público-alvo serve principalmente para:',['Orientar decisões de design','Definir a senha do servidor','Eliminar testes'],0,'O público-alvo influencia linguagem, desafio, interface e experiência.'],
-['CONCEITO','Uma condição de vitória deve responder a qual pergunta?',['Como o jogador sabe que alcançou o objetivo?','Qual IDE foi usada?','Quem criou o banco de dados?'],0,'A condição de vitória explicita o objetivo final.'],
-['CONCEITO','Qual item é adequado a um GDD de uma página?',['Resumo do jogo','Código completo do servidor','Todos os commits Git'],0,'O resumo apresenta história, gameplay, regras e objetivos.'],
-['CONCEITO','Qual decisão pertence ao universo do jogo?',['Como fases e cenários se conectam','Qual senha do Wi-Fi','Qual editor de texto usar'],0,'O universo descreve cenários, estrutura do mundo e conexão entre fases.'],
-['CONCEITO','Por que regras precisam estar claras no GDD?',['Para alinhar como o jogo funciona','Para impedir qualquer mudança','Para substituir playtests'],0,'Regras claras alinham a experiência pretendida.'],
-['GAMEPLAY','Gameplay descreve principalmente:',['Mecânicas, desafios e progressão','Apenas créditos','Somente requisitos de hardware'],0,'Gameplay trata de como se joga e progride.'],
-['GAMEPLAY','Qual é um sistema de recompensa de gameplay?',['XP, pontos ou itens','Nome do arquivo HTML','Resolução do monitor'],0,'Recompensas dão retorno e motivam progressão.'],
-['GAMEPLAY','Um desafio fica mais difícil ao longo das fases. Isso é exemplo de:',['Progressão de dificuldade','Menu de créditos','Backup'],0,'A progressão regula o desafio conforme o avanço.'],
-['GAMEPLAY','Qual ação é uma métrica de personagem típica?',['Andar e pular','Editar README','Criar branch'],0,'Ações e capacidades do personagem fazem parte do gameplay.'],
-['GAMEPLAY','Por que controles devem constar no GDD?',['Para definir como o jogador executa ações','Para esconder comandos','Para dispensar interface'],0,'Controles ligam intenção do jogador às ações do jogo.'],
-['GAMEPLAY','Uma recompensa é mais útil quando:',['Reforça o comportamento e a progressão desejados','É aleatória sem relação com o jogo','Impede o jogador de entender o objetivo'],0,'Recompensas devem conversar com a experiência.'],
-['GAMEPLAY','A câmera influencia o gameplay porque:',['Define como o jogador visualiza e percebe o espaço','Só muda o nome do jogo','Não interfere na experiência'],0,'A câmera é parte da percepção e navegação.'],
-['GAMEPLAY','Qual relação entre história e gameplay é mais consistente?',['As ações do jogador ajudam a avançar a narrativa','A história nunca se relaciona às ações','Gameplay só existe no menu'],0,'O gameplay pode sustentar a progressão da narrativa.'],
-['PLAYTEST','O objetivo central de um playtest é:',['Observar a experiência real e encontrar problemas','Provar que o designer está certo','Evitar mudanças'],0,'Playtest gera evidências sobre a experiência.'],
-['PLAYTEST','Durante um playtest, o melhor comportamento da equipe é:',['Observar antes de explicar tudo ao jogador','Ensinar cada resposta','Ignorar dificuldades'],0,'Observar revela problemas de compreensão e interação.'],
-['PLAYTEST','Se vários jogadores não entendem uma regra, a equipe deve:',['Revisar regra/interface e testar novamente','Culpar os jogadores','Remover o playtest'],0,'Iteração é parte do processo de design.'],
-['PLAYTEST','Qual dado de playtest é mais útil?',['Onde jogadores travam e por quê','Apenas elogios dos amigos','Número de linhas de código'],0,'Problemas observáveis orientam melhorias.'],
-['PLAYTEST','Uma alteração feita após feedback deve ser:',['Validada em novo teste','Considerada perfeita automaticamente','Escondida do restante da equipe'],0,'Mudanças precisam ser verificadas.'],
-['PLAYTEST','O HUD deve ser avaliado porque:',['Comunica informações necessárias durante o jogo','Serve apenas como decoração','Não afeta decisões'],0,'HUD comunica estado, pontuação e recursos.'],
-['PLAYTEST','Se o desafio é impossível para quase todos, qual hipótese testar?',['Dificuldade mal calibrada','O jogo está necessariamente perfeito','O público não importa'],0,'A dificuldade deve ser calibrada ao objetivo e público.'],
-['PLAYTEST','Qual ciclo representa melhor prototipação de jogo?',['Construir → testar → aprender → ajustar','Construir → nunca testar','Planejar → publicar sem jogar'],0,'Iteração reduz incertezas.'],
-['PITCH','Em um pitch de jogo, o objetivo é:',['Comunicar claramente proposta, diferencial e experiência','Ler todo o código','Mostrar somente cronograma'],0,'Pitch sintetiza valor e experiência do projeto.'],
-['PITCH','Qual informação ajuda a explicar o diferencial do jogo?',['Principais características e atrativos','Senha do GitHub','Nome de todas as variáveis'],0,'Características principais tornam a proposta compreensível.'],
-['PITCH','Um pitch coerente deve conectar:',['Problema/proposta, público e gameplay','Somente cores','Somente tecnologia'],0,'A proposta precisa formar uma experiência coerente.'],
-['PITCH','Ao apresentar controles, o grupo deve explicar:',['Como as ações do jogador são executadas','Apenas o modelo do teclado','Somente atalhos do editor'],0,'Controles são parte essencial da experiência.'],
-['PITCH','Qual evidência fortalece um pitch após playtest?',['Mudanças realizadas a partir de observações','Afirmar que ninguém encontrou problemas','Evitar mencionar testes'],0,'Aprendizado e iteração fortalecem a justificativa.'],
-['PITCH','O cronograma no GDD registra:',['Etapas e desenvolvimento planejado','Somente a data de lançamento','Apenas nomes dos integrantes'],0,'O cronograma descreve o desenvolvimento.'],
-['PITCH','Uma boa condição de vitória deve ser:',['Compreensível e relacionada ao objetivo do jogo','Secreta para todos','Mudada a cada minuto'],0,'O jogador precisa entender o que busca alcançar.'],
-['PITCH','Qual fechamento é mais adequado ao pitch?',['Mostrar por que vale testar/continuar o projeto','Abrir o código inteiro','Repetir o título várias vezes'],0,'O fechamento reforça a proposta e próximo passo.']
-];
+const QUESTIONS=require('./questions.json');
 
-function fresh(){return {version:VERSION,sessionId:`S-${Date.now()}-${Math.random().toString(36).slice(2,7)}`,started:false,phase:'LOBBY',turn:0,round:1,teams:[],vote:null,lastResult:null,pitch:null,winnerId:null,questionHistory:{},log:[]}}
+function fresh(){return {version:VERSION,sessionId:`S-${Date.now()}-${Math.random().toString(36).slice(2,7)}`,started:false,phase:'LOBBY',turn:0,round:1,teams:[],vote:null,lastResult:null,pitch:null,winnerId:null,usedQuestionIds:[],log:[]}}
 let G=fresh();
 const streams=new Set();
 let timers=new Set();
@@ -76,36 +43,67 @@ function emitState(){broadcast('state',publicState())}
 function json(res,status,obj){res.writeHead(status,{'Content-Type':'application/json; charset=utf-8','Cache-Control':'no-store'});res.end(JSON.stringify(obj))}
 function body(req){return new Promise((resolve,reject)=>{let s='';req.on('data',c=>{s+=c;if(s.length>1e6)req.destroy()});req.on('end',()=>{try{resolve(s?JSON.parse(s):{})}catch(e){reject(e)}});req.on('error',reject)})}
 function shuffleQuestion(phase,actorId,scope=phase){
- const pool=QUESTIONS.map((q,index)=>({q,index})).filter(x=>x.q[0]===phase);
- const owner=String(actorId||'_GLOBAL');
- G.questionHistory[owner]=G.questionHistory[owner]||{};
- G.questionHistory[owner][scope]=G.questionHistory[owner][scope]||[];
- let used=G.questionHistory[owner][scope];
- let available=pool.filter(x=>!used.includes(x.index));
- if(!available.length){used=[];G.questionHistory[owner][scope]=used;available=[...pool]}
- const chosen=available[Math.floor(Math.random()*available.length)],raw=chosen.q;
- used.push(chosen.index);
- const pairs=raw[2].map((text,i)=>({text,correct:i===raw[3]}));
+ let bank='regular';
+ if(scope==='BATTLE')bank='battle';
+ if(scope==='PITCH_FINAL')bank='pitch-final';
+ let pool=QUESTIONS.filter(q=>q.bank===bank&&(bank!=='regular'||q.phase===phase));
+ const used=new Set(G.usedQuestionIds||[]);
+ const available=pool.filter(q=>!used.has(q.id));
+ if(!available.length)throw new Error(`Banco de questões esgotado para ${bank}${bank==='regular'?`/${phase}`:''}. Reinicie a partida para reutilizar questões.`);
+ const raw=available[Math.floor(Math.random()*available.length)];
+ G.usedQuestionIds.push(raw.id);
+ const pairs=raw.options.map((text,i)=>({text,correct:i===raw.correct}));
  for(let i=pairs.length-1;i>0;i--){const j=Math.floor(Math.random()*(i+1));[pairs[i],pairs[j]]=[pairs[j],pairs[i]]}
- return {id:`${scope}-${chosen.index}`,phase,text:raw[1],options:pairs.map(x=>x.text),correct:pairs.findIndex(x=>x.correct),why:raw[4]};
+ return {id:raw.id,phase:raw.phase,text:raw.text,options:pairs.map(x=>x.text),correct:pairs.findIndex(x=>x.correct),why:raw.why};
 }
 function nextDice(){if(FIXED_DICE.length)return FIXED_DICE[fixedDiceIndex++%FIXED_DICE.length];return 1+Math.floor(Math.random()*6)}
 function podiumPayload(){return [...G.teams].sort((a,b)=>b.xp-a.xp||b.pos-a.pos).slice(0,3).map(visibleTeam)}
 function showPodiumThenNext(){G.phase='PODIUM';emitState();broadcast('podium',{teams:podiumPayload()});later(()=>{if(G.winnerId){G.phase='GAMEOVER';emitState();return}nextTurn()},DUR.podium)}
 function nextTurn(){if(!G.started||G.winnerId)return;if(G.vote?.open)return;G.turn=(G.turn+1)%G.teams.length;if(G.turn===0)G.round++;const t=G.teams[G.turn];if(!t)return;if(t.blocked){t.blocked=false;G.phase='NOTICE';emitState();broadcast('notice',{title:'🔓 CRUNCH CONSUMIDO',body:`${t.name} perde este turno e está desbloqueado.`,teamId:t.id});later(nextTurn,DUR.notice);return}G.phase='TURN';emitState()}
 function resultRows(v){const results={};for(const id of v.eligible){const c=v.responses[id];results[id]={answered:Number.isInteger(c),choice:Number.isInteger(c)?c:null,correct:c===v.question.correct}}return results}
-function applyStandardResult(payload){const actor=team(payload.actorId);if(!actor)return;if(payload.kind==='battle'){const opp=team(payload.opponentId),ar=payload.results[actor.id],br=opp&&payload.results[opp.id];if(ar?.correct){actor.xp+=2;actor.blocked=false}else{actor.xp=Math.max(0,actor.xp-1);actor.blocked=true}if(opp){if(br?.correct){opp.xp+=2;opp.blocked=false}else{opp.xp=Math.max(0,opp.xp-1);opp.blocked=true}}}else{for(const [id,r] of Object.entries(payload.results)){const t=team(id);if(t&&r.correct)t.xp++}if(!payload.results[actor.id]?.correct)actor.blocked=true}}
+function applyStandardResult(payload){const actor=team(payload.actorId);if(!actor)return;if(payload.kind==='battle'){
+ const opp=team(payload.opponentId),ar=payload.results[actor.id],br=opp&&payload.results[opp.id];
+ if(ar?.correct)actor.xp+=2;if(br?.correct&&opp)opp.xp+=2;
+ // Crunch apenas para a equipe que efetivamente perde a disputa.
+ // Acerto x erro: quem errou perde. Empate (ambas acertam ou ambas erram): ninguém é bloqueado.
+ if(opp&&ar?.correct&&!br?.correct){opp.xp=Math.max(0,opp.xp-1);opp.blocked=true;actor.blocked=false}
+ else if(opp&&!ar?.correct&&br?.correct){actor.xp=Math.max(0,actor.xp-1);actor.blocked=true;opp.blocked=false}
+ else {actor.blocked=false;if(opp)opp.blocked=false}
+ }else{for(const [id,r] of Object.entries(payload.results)){const t=team(id);if(t&&r.correct)t.xp++}if(!payload.results[actor.id]?.correct)actor.blocked=true}}
 function finishVote(){const v=G.vote;if(!v||!v.open)return;v.open=false;const payload={voteId:v.id,kind:v.kind,actorId:v.actorId,opponentId:v.opponentId,eligible:v.eligible,question:v.question,results:resultRows(v),pitchStep:v.pitchStep||null};G.lastResult=payload;log('vote:finish',{voteId:v.id,results:payload.results});if(v.kind==='pitch-final'){const actor=team(v.actorId);const ok=!!payload.results[actor.id]?.correct;if(ok)G.pitch.hits++;G.pitch.step++;broadcast('vote:result',payload);G.phase='RESULT';emitState();later(()=>{G.vote=null;G.lastResult=null;if(G.pitch.step>=5){if(G.pitch.hits>=3){G.winnerId=actor.id;G.phase='PODIUM';broadcast('final',{success:true,teamId:actor.id,hits:G.pitch.hits});emitState();broadcast('podium',{teams:podiumPayload(),final:true});later(()=>{G.phase='GAMEOVER';emitState()},DUR.podium)}else{actor.pos=Math.max(1,actor.pos-3);actor.phase=phaseForPos(actor.pos);broadcast('final',{success:false,teamId:actor.id,hits:G.pitch.hits});G.pitch=null;showPodiumThenNext()}}else{openPitchQuestion(actor)}},DUR.result);return}
 applyStandardResult(payload);broadcast('vote:result',payload);G.phase='RESULT';emitState();later(()=>{G.vote=null;G.lastResult=null;showPodiumThenNext()},DUR.result)}
-function openVote({kind='collective',actorId,opponentId=null,duration=DUR.vote,pitchStep=null}){if(G.vote?.open)return;const actor=team(actorId);if(!actor)return;const eligible=kind==='battle'?[actorId,opponentId].filter(Boolean):kind==='pitch-final'?[actorId]:G.teams.filter(t=>!t.blocked).map(t=>t.id);if(kind==='battle'&&eligible.length!==2)return;const qPhase=kind==='pitch-final'?'PITCH':actor.phase;const question=shuffleQuestion(qPhase,actorId,kind==='pitch-final'?'PITCH_FINAL':qPhase);const v={id:`V-${Date.now()}-${Math.random().toString(36).slice(2,6)}`,kind,actorId,opponentId,eligible,question,responses:{},open:true,endsAt:Date.now()+duration,duration:Math.ceil(duration/1000),pitchStep};G.vote=v;G.phase=kind==='battle'?'BATTLE':kind==='pitch-final'?'PITCH_FINAL':'QUESTION';log('vote:open',{voteId:v.id,kind,eligible});emitState();broadcast('vote:open',publicVote());const tick=every(()=>{if(!G.vote||G.vote.id!==v.id||!G.vote.open){clearInterval(tick);timers.delete(tick);return}broadcast('vote:tick',{voteId:v.id,remaining:Math.max(0,Math.ceil((v.endsAt-Date.now())/1000))})},250);later(()=>finishVote(),duration)}
+function openVote({kind='collective',actorId,opponentId=null,duration=DUR.vote,pitchStep=null}){if(G.vote?.open)return;const actor=team(actorId);if(!actor)return;const eligible=kind==='battle'?[actorId,opponentId].filter(Boolean):kind==='pitch-final'?[actorId]:G.teams.filter(t=>!t.blocked).map(t=>t.id);if(kind==='battle'&&eligible.length!==2)return;const qPhase=kind==='pitch-final'?'PITCH':actor.phase;const question=shuffleQuestion(qPhase,actorId,kind==='pitch-final'?'PITCH_FINAL':kind==='battle'?'BATTLE':qPhase);const v={id:`V-${Date.now()}-${Math.random().toString(36).slice(2,6)}`,kind,actorId,opponentId,eligible,question,responses:{},open:true,endsAt:Date.now()+duration,duration:Math.ceil(duration/1000),pitchStep};G.vote=v;G.phase=kind==='battle'?'BATTLE':kind==='pitch-final'?'PITCH_FINAL':'QUESTION';log('vote:open',{voteId:v.id,kind,eligible});emitState();broadcast('vote:open',publicVote());const tick=every(()=>{if(!G.vote||G.vote.id!==v.id||!G.vote.open){clearInterval(tick);timers.delete(tick);return}broadcast('vote:tick',{voteId:v.id,remaining:Math.max(0,Math.ceil((v.endsAt-Date.now())/1000))})},250);later(()=>finishVote(),duration)}
 function openPitchQuestion(actor){if(!G.pitch)return;openVote({kind:'pitch-final',actorId:actor.id,duration:DUR.vote,pitchStep:G.pitch.step+1})}
 function startFinal(actor){G.pitch={teamId:actor.id,step:0,hits:0};broadcast('notice',{title:'🏰 PITCH DAY',body:`${actor.name} chegou ao Greenlight. São 5 perguntas; precisa acertar pelo menos 3.`});G.phase='NOTICE';emitState();later(()=>openPitchQuestion(actor),DUR.notice)}
-function land(actor){actor.phase=phaseForPos(actor.pos);const type=CELL_TYPES[(actor.pos-1)%CELL_TYPES.length];log('land',{teamId:actor.id,pos:actor.pos,type});if(type==='final'){startFinal(actor);return}if(type==='bonus'){actor.xp++;G.phase='NOTICE';emitState();broadcast('notice',{title:'⭐ POWER-UP',body:`${actor.name} recebe +1 XP.`,teamId:actor.id});later(()=>showPodiumThenNext(),DUR.notice);return}if(type==='setback'){actor.pos=Math.max(1,actor.pos-1);actor.phase=phaseForPos(actor.pos);G.phase='NOTICE';emitState();broadcast('notice',{title:'↩️ REVÉS',body:`${actor.name} volta 1 casa.`,teamId:actor.id});later(()=>showPodiumThenNext(),DUR.notice);return}if(type==='battle'){const opp=G.teams.filter(t=>t.id!==actor.id&&!t.blocked).sort((a,b)=>a.xp-b.xp||a.pos-b.pos)[0];if(opp){openVote({kind:'battle',actorId:actor.id,opponentId:opp.id});return}}openVote({actorId:actor.id})}
+function land(actor){actor.phase=phaseForPos(actor.pos);const type=CELL_TYPES[(actor.pos-1)%CELL_TYPES.length];log('land',{teamId:actor.id,pos:actor.pos,type});if(type==='final'){startFinal(actor);return}if(type==='bonus'){actor.xp++;G.phase='NOTICE';emitState();broadcast('notice',{title:'⭐ POWER-UP',body:`${actor.name} recebe +1 XP.`,teamId:actor.id});later(()=>showPodiumThenNext(),DUR.notice);return}if(type==='setback'){
+ const from=actor.pos;
+ actor.pos=Math.max(1,actor.pos-1);actor.phase=phaseForPos(actor.pos);
+ G.phase='NOTICE';emitState();
+ broadcast('notice',{title:'↩️ REVÉS',body:`${actor.name} volta 1 casa.`,teamId:actor.id});
+ later(()=>{
+   G.phase='MOVE';emitState();
+   broadcast('move:step',{teamId:actor.id,pos:actor.pos,target:actor.pos,from,effect:'setback'});
+   later(()=>{
+     const destinationType=CELL_TYPES[(actor.pos-1)%CELL_TYPES.length];
+     broadcast('landing',{teamId:actor.id,pos:actor.pos,type:destinationType,source:'setback'});
+     // A casa de destino precisa ser resolvida antes do pódio.
+     // Evita loop imediato de revés sobre revés: nesse caso mostra a casa e encerra o turno.
+     if(destinationType==='setback'){
+       G.phase='NOTICE';emitState();
+       broadcast('notice',{title:'🛤️ NOVA CASA',body:`${actor.name} chegou à casa ${actor.pos}.`,teamId:actor.id});
+       later(()=>showPodiumThenNext(),DUR.notice);return;
+     }
+     land(actor);
+   },DUR.move);
+ },DUR.notice);
+ return
+}if(type==='battle'){const opp=G.teams.filter(t=>t.id!==actor.id&&!t.blocked).sort((a,b)=>a.xp-b.xp||a.pos-b.pos)[0];if(opp){openVote({kind:'battle',actorId:actor.id,opponentId:opp.id});return}}openVote({actorId:actor.id})}
 function roll(){if(!G.started||G.phase!=='TURN'||G.vote?.open||G.winnerId)return false;const actor=G.teams[G.turn];if(!actor)return false;const value=nextDice(),from=actor.pos,target=Math.min(30,from+value);G.phase='DICE';log('dice',{teamId:actor.id,value,from,target});emitState();broadcast('dice:rolling',{teamId:actor.id,duration:DUR.dice});later(()=>{broadcast('dice:result',{teamId:actor.id,value,from,target,duration:DUR.diceResult});later(()=>{G.phase='MOVE';emitState();let p=from;const moveOne=()=>{if(p>=target){later(()=>land(actor),500);return}p++;actor.pos=p;actor.phase=phaseForPos(p);emitState();broadcast('move:step',{teamId:actor.id,pos:p,target});later(moveOne,DUR.move)};moveOne()},DUR.diceResult)},DUR.dice);return true}
 function reset(){clearAllTimers();G=fresh();fixedDiceIndex=0;broadcast('reset',{version:VERSION});emitState()}
 function qrSvg(text){const qr=new QRCode(-1,QRErrorCorrectLevel.M);qr.addData(text);qr.make();const n=qr.getModuleCount(),m=4,size=n+2*m;let d='';for(let r=0;r<n;r++)for(let c=0;c<n;c++)if(qr.isDark(r,c))d+=`M${c+m} ${r+m}h1v1h-1z`;return `<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 ${size} ${size}" shape-rendering="crispEdges"><rect width="100%" height="100%" fill="white"/><path d="${d}" fill="black"/></svg>`}
 function serveStatic(req,res,url){let rel=url.pathname==='/'?'professor.html':url.pathname.replace(/^\//,'');const file=path.normalize(path.join(PUBLIC,rel));if(!file.startsWith(PUBLIC))return json(res,403,{error:'forbidden'});if(!fs.existsSync(file)||fs.statSync(file).isDirectory())return false;const ext=path.extname(file),ct={'.html':'text/html; charset=utf-8','.js':'application/javascript; charset=utf-8','.css':'text/css; charset=utf-8','.svg':'image/svg+xml'}[ext]||'application/octet-stream';res.writeHead(200,{'Content-Type':ct,'Cache-Control':'no-store'});fs.createReadStream(file).pipe(res);return true}
 async function api(req,res,url){if(req.method==='GET'&&url.pathname==='/api/state')return json(res,200,publicState());if(req.method==='GET'&&url.pathname==='/api/trace')return json(res,200,{version:VERSION,state:publicState(),log:G.log.slice(-300)});if(req.method==='GET'&&url.pathname==='/healthz')return json(res,200,{ok:true,version:VERSION,phase:G.phase,started:G.started,teams:G.teams.map(t=>({id:t.id,joined:!!t.controlId,pos:t.pos,xp:t.xp,blocked:t.blocked})),vote:G.vote?{id:G.vote.id,open:G.vote.open,eligible:G.vote.eligible,voters:Object.keys(G.vote.responses),endsAt:G.vote.endsAt}:null,lastResult:G.lastResult?{voteId:G.lastResult.voteId,kind:G.lastResult.kind}:null,pitch:G.pitch,winnerId:G.winnerId});if(req.method==='GET'&&url.pathname==='/events'){res.writeHead(200,{'Content-Type':'text/event-stream','Cache-Control':'no-store','Connection':'keep-alive'});res.write(': connected\n\n');streams.add(res);sse(res,'hello',{version:VERSION,state:publicState()});req.on('close',()=>streams.delete(res));return true}if(req.method==='GET'&&url.pathname==='/qr.svg'){const text=url.searchParams.get('text')||'';res.writeHead(200,{'Content-Type':'image/svg+xml','Cache-Control':'no-store'});res.end(qrSvg(text));return true}if(req.method!=='POST')return false;let d={};try{d=await body(req)}catch{return json(res,400,{ok:false,error:'JSON inválido'})}
+ if(process.env.NODE_ENV==='test'&&url.pathname==='/api/test/question'){try{const phase=String(d.phase||'CONCEITO'),scope=String(d.scope||phase);const q=shuffleQuestion(phase,'TEST',scope);return json(res,200,{ok:true,question:q,used:G.usedQuestionIds.length})}catch(e){return json(res,409,{ok:false,error:e.message})}}
  if(process.env.NODE_ENV==='test'&&url.pathname==='/api/test/open-vote'){
    if(G.vote?.open){G.vote=null}
    const actorId=String(d.actorId||'T1'),kind=String(d.kind||'collective'),opponentId=d.opponentId?String(d.opponentId):null;
