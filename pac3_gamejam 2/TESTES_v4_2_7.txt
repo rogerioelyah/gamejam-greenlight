@@ -1,0 +1,25 @@
+GAME JAM GREENLIGHT v4.2.7 — BLOQUEIO DE CONTROLE + DUELS SEM REPETIÇÃO
+
+CORREÇÕES
+- Equipe em Crunch não vê botão de dado.
+- Equipe em Crunch não vê alternativas de resposta.
+- Cliente bloqueado não consegue enviar voto.
+- Servidor rejeita lançamento de dado por equipe bloqueada.
+- Servidor rejeita voto de equipe bloqueada mesmo com tela antiga/stale.
+- Durante o aviso de Crunch, a equipe permanece marcada como bloqueada; só é desbloqueada ao consumir a penalidade.
+- Duels/Battles agora têm trava dupla contra repetição:
+  1) ID da questão;
+  2) chave normalizada do enunciado (sem acentos, pontuação, maiúsculas/minúsculas).
+- O uso de cada questão é registrado no trace do servidor como question:used.
+
+VALIDAÇÃO
+35/35 cenários de integração PASS
+5/5 eventos SSE PASS
+7/7 cenários de banco PASS
+Inclui:
+- blocked control hides dice and answers
+- blocked client cannot submit vote
+- blocked team cannot roll on server
+- 80 Battle questions unique A/B/C/D
+- Battle question stems never repeat after normalization
+- 430/430 IDs/textos únicos

@@ -1,0 +1,14 @@
+GAME JAM GREENLIGHT v4.2.3 — SESSÃO LIMPA
+
+Correção:
+- vínculo do celular com Estúdio não é mais persistido em localStorage;
+- controlId é novo a cada carregamento/sessão;
+- reset do jogo limpa localStorage e sessionStorage;
+- mudança de sessionId invalida vínculo, voto e seleção anteriores;
+- nova partida exige nova escolha de Estúdio no celular;
+- estado autoritativo do servidor já é recriado no reset.
+
+Validação:
+25/25 cenários de integração PASS
+5/5 SSE PASS
+Sintaxe server/professor/aluno PASS

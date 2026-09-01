@@ -1,0 +1,21 @@
+GAME JAM GREENLIGHT v4.3.0 — AJUSTES APÓS USO COM A TURMA
+
+- Crunch somente para participante que perde Duel/Battle.
+- Erro em desafio normal não bloqueia.
+- Primeiro clique definitivo.
+- Encerra votação quando todos respondem.
+- XP por velocidade: 0–7s=3, 8–14s=2, 15–20s=1.
+- Pergunta no controle do aluno.
+- Casas ? até serem reveladas.
+- Portões XP: 9/4 XP; 17/8 XP; 25/12 XP; 30/16 XP.
+- Perguntas sem repetição global.
+- Gabaritos distribuídos de forma equilibrada.
+- Alternativas equalizadas para reduzir pista de comprimento.
+- Sem e-book/livro/material didático nos enunciados.
+- Pitch Final: 50 questões exclusivas em formato de microcasos de decisão.
+
+VALIDAÇÃO
+35/35 integração PASS
+5/5 SSE PASS
+7/7 banco PASS
+10/10 regras de sala v4.3 PASS
